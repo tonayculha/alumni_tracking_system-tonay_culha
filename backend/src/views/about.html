@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alumni Tracking System | Architecture & About</title>
+  <meta name="description" content="Technical specifications, architecture, and design philosophy of the Alumni Tracking System.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header>
+    <div class="nav-container">
+      <a href="/home" class="brand">
+        🎓 Alumni System
+        <span class="brand-badge">Core v1.0</span>
+      </a>
+      <nav>
+        <ul>
+          <li><a href="/home">Home</a></li>
+          <li><a href="/about" class="active">About</a></li>
+          <li><a href="/health" target="_blank">API Health</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-tag">System Design & Specifications</div>
+      <h1>About the Project</h1>
+      <p>
+        Engineered as an independent, clean-room implementation of the Alumni Tracking System coursework, 
+        emphasizing enterprise architectural patterns, containerization, and zero-touch deployment.
+      </p>
+    </section>
+
+    <section class="card" style="margin-bottom: 2rem;">
+      <h3>🎯 Architectural Philosophy</h3>
+      <p style="margin-top: 0.5rem;">
+        This implementation avoids monolithic, single-file scripts in favor of a clean layered structure. 
+        Each layer has a single responsibility: routing delegates to controllers, controllers orchestrate input/output, 
+        and services execute domain business logic and numeric validation.
+      </p>
+    </section>
+
+    <section class="card" style="margin-bottom: 2rem;">
+      <h3>📋 Technology Stack & Environment</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Technology</th>
+              <th>Version / Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Runtime</td>
+              <td>Node.js</td>
+              <td>v20+ LTS (Alpine Linux in Docker)</td>
+            </tr>
+            <tr>
+              <td>HTTP Framework</td>
+              <td>Express</td>
+              <td>v4.19+ with Helmet security headers & Morgan logging</td>
+            </tr>
+            <tr>
+              <td>Database</td>
+              <td>PostgreSQL</td>
+              <td>16-Alpine with isolated persistent volume</td>
+            </tr>
+            <tr>
+              <td>Containerization</td>
+              <td>Docker & Compose</td>
+              <td>Multi-container orchestration with dependency health checks</td>
+            </tr>
+            <tr>
+              <td>Deployment Rule</td>
+              <td>One-Command Rule</td>
+              <td><code>docker compose up --build</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>🛣️ Endpoint Directory & Contract</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Description</th>
+              <th>Expected Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/</code> or <code>/health</code></td>
+              <td>System health check</td>
+              <td><code>application/json</code> (status, uptime, memory, db check)</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/hello/:name</code></td>
+              <td>Parametric greeting</td>
+              <td><code>application/json</code> with sanitized name</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/sum/:number1/:number2</code></td>
+              <td>Numeric summation with strict validation</td>
+              <td><code>application/json</code> (HTTP 200 on success, HTTP 400 on NaN)</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/home</code></td>
+              <td>Platform overview view</td>
+              <td><code>text/html</code> (Semantic HTML5)</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/about</code></td>
+              <td>Architecture & specifications view</td>
+              <td><code>text/html</code> (Semantic HTML5)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Alumni Tracking System Core Team. Built for strict coursework adherence and production readiness.</p>
+  </footer>
+</body>
+</html>
