@@ -9,6 +9,8 @@ process.env.PORT = '3001';
 const app = require('../src/app');
 const { resetUsers } = require('../src/services/user.service');
 const { userModel, UserModel } = require('../src/models/user.model');
+const { resetAnnouncements } = require('../src/services/announcement.service');
+const { announcementModel, AnnouncementModel } = require('../src/models/announcement.model');
 
 describe('Alumni Tracking System API Test Suite', () => {
   let server;
@@ -252,11 +254,19 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.ok(spec.paths['/users/{id}'], 'paths must contain /users/{id}');
       assert.ok(spec.paths['/api/users'], 'paths must contain /api/users');
       assert.ok(spec.paths['/api/users/{id}'], 'paths must contain /api/users/{id}');
+      assert.ok(spec.paths['/announcements'], 'paths must contain /announcements');
+      assert.ok(spec.paths['/announcements/{id}'], 'paths must contain /announcements/{id}');
+      assert.ok(spec.paths['/api/announcements'], 'paths must contain /api/announcements');
+      assert.ok(spec.paths['/api/announcements/{id}'], 'paths must contain /api/announcements/{id}');
       assert.ok(spec.components.schemas.User, 'schemas must contain User model');
       assert.ok(spec.components.schemas.CreateUserInput, 'schemas must contain CreateUserInput');
+      assert.ok(spec.components.schemas.Announcement, 'schemas must contain Announcement model');
+      assert.ok(spec.components.schemas.CreateAnnouncementInput, 'schemas must contain CreateAnnouncementInput');
       const tagNames = spec.tags.map((t) => t.name);
       assert.ok(tagNames.includes('Users API (REST)'), 'tags must contain Users API (REST)');
       assert.ok(tagNames.includes('Users View (MVC)'), 'tags must contain Users View (MVC)');
+      assert.ok(tagNames.includes('Announcements API (REST)'), 'tags must contain Announcements API (REST)');
+      assert.ok(tagNames.includes('Announcements View (MVC)'), 'tags must contain Announcements View (MVC)');
     });
   });
 
@@ -607,6 +617,345 @@ describe('Alumni Tracking System API Test Suite', () => {
       const staticUsers = UserModel.findAll();
       assert.ok(Array.isArray(staticUsers));
       assert.strictEqual(UserModel.count(), userModel.count());
+    });
+  });
+
+  // ==========================================
+  // Week 4 Homework: In-Memory Announcement Model Specification
+  // ==========================================
+  describe('Week 4 Homework: In-Memory Announcement Model Specification', () => {
+    beforeEach(() => {
+      resetAnnouncements();
+    });
+
+    test('AnnouncementModel.findAll returns all seed announcements (at least 3)', () => {
+      const items = announcementModel.findAll();
+      assert.ok(Array.isArray(items));
+      assert.ok(items.length >= 3, `Expected at least 3 seed items, got ${items.length}`);
+      assert.strictEqual(items.length, announcementModel.count());
+
+      for (const item of items) {
+        assert.ok(item.id, 'Announcement must have an id');
+        assert.ok(item.title, 'Announcement must have a title');
+        assert.ok(item.content, 'Announcement must have content');
+        assert.ok(['academic', 'career', 'social'].includes(item.category));
+        assert.ok(item.author, 'Announcement must have an author');
+        assert.ok(['low', 'normal', 'urgent'].includes(item.priority));
+        assert.ok(item.createdAt, 'Announcement must have createdAt timestamp');
+      }
+    });
+
+    test('AnnouncementModel.findById returns target announcement by UUID or null', () => {
+      const seedId = 'a1111111-1111-4111-a111-111111111111';
+      const item = announcementModel.findById(seedId);
+      assert.ok(item);
+      assert.strictEqual(item.title, 'Annual Alumni Homecoming 2026');
+
+      const nonExistent = announcementModel.findById('99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(nonExistent, null);
+    });
+
+    test('AnnouncementModel.create stores announcement with schema compliance and increments count', () => {
+      const initialCount = announcementModel.count();
+      const created = announcementModel.create({
+        title: 'Spring Research Symposium 2027',
+        content: 'Call for undergraduate and graduate research papers across computing sciences.',
+        category: 'academic',
+        author: 'Dean of Research',
+        priority: 'urgent',
+      });
+
+      assert.ok(created.id);
+      assert.strictEqual(created.title, 'Spring Research Symposium 2027');
+      assert.strictEqual(created.category, 'academic');
+      assert.strictEqual(created.priority, 'urgent');
+      assert.strictEqual(announcementModel.count(), initialCount + 1);
+
+      const fetched = announcementModel.findById(created.id);
+      assert.strictEqual(fetched.title, 'Spring Research Symposium 2027');
+    });
+
+    test('AnnouncementModel.update modifies properties and updates timestamp', () => {
+      const seedId = 'b2222222-2222-4222-a222-222222222222';
+      const updated = announcementModel.update(seedId, {
+        title: 'Fall Career Fair 2026 (Updated Schedule)',
+        priority: 'urgent',
+      });
+
+      assert.ok(updated);
+      assert.strictEqual(updated.title, 'Fall Career Fair 2026 (Updated Schedule)');
+      assert.strictEqual(updated.priority, 'urgent');
+      assert.ok(updated.updatedAt);
+
+      const fetched = announcementModel.findById(seedId);
+      assert.strictEqual(fetched.title, 'Fall Career Fair 2026 (Updated Schedule)');
+    });
+
+    test('AnnouncementModel.delete removes target record and decrements count', () => {
+      const seedId = 'c3333333-3333-4333-a333-333333333333';
+      const initialCount = announcementModel.count();
+      const success = announcementModel.delete(seedId);
+      assert.strictEqual(success, true);
+      assert.strictEqual(announcementModel.count(), initialCount - 1);
+      assert.strictEqual(announcementModel.findById(seedId), null);
+
+      const fail = announcementModel.delete('non-existent');
+      assert.strictEqual(fail, false);
+    });
+
+    test('AnnouncementModel enforces defensive cloning against external mutations', () => {
+      const items = announcementModel.findAll();
+      items[0].title = 'Tampered Directly In Memory';
+
+      const verify = announcementModel.findById(items[0].id);
+      assert.notStrictEqual(verify.title, 'Tampered Directly In Memory');
+    });
+
+    test('AnnouncementModel static methods delegate properly to singleton instance', () => {
+      assert.strictEqual(typeof AnnouncementModel.findAll, 'function');
+      const staticItems = AnnouncementModel.findAll();
+      assert.ok(Array.isArray(staticItems));
+      assert.strictEqual(AnnouncementModel.count(), announcementModel.count());
+    });
+  });
+
+  // ==========================================
+  // Week 4 Homework: In-Memory Announcement CRUD Operations (/api/announcements)
+  // ==========================================
+  describe('Week 4 Homework: In-Memory Announcement CRUD Operations (/api/announcements)', () => {
+    beforeEach(() => {
+      resetAnnouncements();
+    });
+
+    test('GET /api/announcements returns initial seed announcements', async () => {
+      const res = await request('/api/announcements');
+      assert.strictEqual(res.statusCode, 200);
+      assert.match(res.headers['content-type'], /json/);
+
+      const items = res.json();
+      assert.ok(Array.isArray(items));
+      assert.ok(items.length >= 3);
+    });
+
+    test('POST /api/announcements creates a new announcement and returns 201 with generated UUID', async () => {
+      const payload = {
+        title: 'Alumni Tech Talk: AI in Production',
+        content: 'Engineering deep-dive on modern agentic workflows hosted by senior alumni.',
+        category: 'academic',
+        author: 'Computer Science Department',
+        priority: 'urgent',
+      };
+
+      const res = await apiRequest('POST', '/api/announcements', payload);
+      assert.strictEqual(res.statusCode, 201);
+      assert.match(res.headers['content-type'], /json/);
+
+      const created = res.json();
+      assert.ok(created.id);
+      assert.match(created.id, /^[0-9a-fA-F-]{36}$/);
+      assert.strictEqual(created.title, payload.title);
+      assert.strictEqual(created.category, payload.category);
+      assert.strictEqual(created.priority, payload.priority);
+      assert.ok(created.createdAt);
+
+      // Verify presence in list
+      const listRes = await request('/api/announcements');
+      const allItems = listRes.json();
+      assert.ok(allItems.some((a) => a.id === created.id));
+    });
+
+    test('POST /api/announcements returns 400 for invalid/missing fields', async () => {
+      // Missing title
+      let res = await apiRequest('POST', '/api/announcements', {
+        content: 'Valid content long enough',
+        category: 'career',
+        author: 'Admin',
+      });
+      assert.strictEqual(res.statusCode, 400);
+
+      // Invalid category
+      res = await apiRequest('POST', '/api/announcements', {
+        title: 'Valid Title',
+        content: 'Valid content long enough',
+        category: 'invalid-category',
+        author: 'Admin',
+      });
+      assert.strictEqual(res.statusCode, 400);
+
+      // Invalid priority
+      res = await apiRequest('POST', '/api/announcements', {
+        title: 'Valid Title',
+        content: 'Valid content long enough',
+        category: 'social',
+        author: 'Admin',
+        priority: 'super-urgent',
+      });
+      assert.strictEqual(res.statusCode, 400);
+    });
+
+    test('GET /api/announcements/:id returns 200 with matching item', async () => {
+      const seedId = 'a1111111-1111-4111-a111-111111111111';
+      const res = await request(`/api/announcements/${seedId}`);
+      assert.strictEqual(res.statusCode, 200);
+
+      const item = res.json();
+      assert.strictEqual(item.id, seedId);
+      assert.strictEqual(item.title, 'Annual Alumni Homecoming 2026');
+    });
+
+    test('GET /api/announcements/:id returns 404 for unknown ID', async () => {
+      const res = await request('/api/announcements/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+      const data = res.json();
+      assert.strictEqual(data.status, 'error');
+      assert.strictEqual(data.error, 'NotFoundError');
+    });
+
+    test('PUT /api/announcements/:id updates full announcement and returns 200', async () => {
+      const seedId = 'b2222222-2222-4222-a222-222222222222';
+      const payload = {
+        title: 'Updated Tech Career Fair Schedule',
+        content: 'Now featuring over 100 enterprise tech exhibitors with on-site interviews.',
+        category: 'career',
+        author: 'Career Center',
+        priority: 'urgent',
+      };
+
+      const res = await apiRequest('PUT', `/api/announcements/${seedId}`, payload);
+      assert.strictEqual(res.statusCode, 200);
+
+      const updated = res.json();
+      assert.strictEqual(updated.id, seedId);
+      assert.strictEqual(updated.title, payload.title);
+      assert.strictEqual(updated.priority, 'urgent');
+
+      // Verify persistence
+      const getRes = await request(`/api/announcements/${seedId}`);
+      assert.strictEqual(getRes.json().title, payload.title);
+    });
+
+    test('PUT /api/announcements/:id returns 404 for non-existent ID', async () => {
+      const res = await apiRequest('PUT', '/api/announcements/99999999-9999-9999-9999-999999999999', {
+        title: 'Ghost Announcement',
+        content: 'Ghost details long enough',
+        category: 'social',
+        author: 'Ghost Author',
+      });
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('PATCH /api/announcements/:id partially updates announcement and returns 200', async () => {
+      const seedId = 'c3333333-3333-4333-a333-333333333333';
+      const res = await apiRequest('PATCH', `/api/announcements/${seedId}`, {
+        priority: 'urgent',
+      });
+
+      assert.strictEqual(res.statusCode, 200);
+      const item = res.json();
+      assert.strictEqual(item.id, seedId);
+      assert.strictEqual(item.priority, 'urgent');
+
+      // Verify persistence
+      const getRes = await request(`/api/announcements/${seedId}`);
+      assert.strictEqual(getRes.json().priority, 'urgent');
+    });
+
+    test('PATCH /api/announcements/:id returns 404 for non-existent ID', async () => {
+      const res = await apiRequest('PATCH', '/api/announcements/99999999-9999-9999-9999-999999999999', {
+        priority: 'urgent',
+      });
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('DELETE /api/announcements/:id removes announcement and returns 200', async () => {
+      const seedId = 'c3333333-3333-4333-a333-333333333333';
+      const res = await apiRequest('DELETE', `/api/announcements/${seedId}`);
+      assert.strictEqual(res.statusCode, 200);
+
+      const data = res.json();
+      assert.strictEqual(data.status, 'success');
+      assert.strictEqual(data.id, seedId);
+
+      // Verify subsequent GET returns 404
+      const getRes = await request(`/api/announcements/${seedId}`);
+      assert.strictEqual(getRes.statusCode, 404);
+    });
+
+    test('DELETE /api/announcements/:id returns 404 when deleting non-existent ID', async () => {
+      const res = await apiRequest('DELETE', '/api/announcements/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+  });
+
+  // ==========================================
+  // Week 4 Homework: Announcement View Layer (/announcements)
+  // ==========================================
+  describe('Week 4 Homework: Announcement View Layer (/announcements)', () => {
+    beforeEach(() => {
+      resetAnnouncements();
+    });
+
+    test('GET /announcements returns 200 with semantic HTML page and pre-hydrated bulletins', async () => {
+      const res = await request('/announcements');
+      assert.strictEqual(res.statusCode, 200);
+      assert.match(res.headers['content-type'], /html/);
+      assert.match(res.body, /<title>Alumni Tracking System \| Announcements<\/title>/);
+      assert.match(res.body, /Announcements &amp; Bulletins/);
+      assert.match(res.body, /Annual Alumni Homecoming 2026/);
+      assert.match(res.body, /<header>/);
+      assert.match(res.body, /<main>/);
+      assert.match(res.body, /<footer>/);
+    });
+
+    test('POST /announcements with urlencoded form submission creates announcement and redirects (302)', async () => {
+      const formPayload = 'title=Campus+Hackathon+2026&content=Annual+48-hour+innovation+hackathon+with+cash+prizes.&category=academic&author=Hackathon+Club&priority=urgent';
+      const res = await apiRequest('POST', '/announcements', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/announcements\?status=created/);
+
+      // Verify announcement is persisted
+      const listRes = await request('/api/announcements');
+      const items = listRes.json();
+      assert.ok(items.some((a) => a.title === 'Campus Hackathon 2026'));
+    });
+
+    test('POST /announcements with invalid form data redirects with error parameter (302)', async () => {
+      const formPayload = 'title=Hi&content=Short&category=invalid&author=A';
+      const res = await apiRequest('POST', '/announcements', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/announcements\?error=/);
+    });
+
+    test('GET /announcements/:id with HTML accept header redirects to view query (302)', async () => {
+      const seedId = 'a1111111-1111-4111-a111-111111111111';
+      const res = await request(`/announcements/${seedId}`, { Accept: 'text/html' });
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, new RegExp(`/announcements\\?view=${seedId}`));
+    });
+
+    test('GET /announcements/:id with non-existent ID returns 404', async () => {
+      const res = await request('/announcements/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /announcements/:id/delete with form action deletes announcement and redirects (302)', async () => {
+      const seedId = 'b2222222-2222-4222-a222-222222222222';
+      const res = await apiRequest('POST', `/announcements/${seedId}/delete`, '', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/announcements\?status=deleted/);
+
+      // Verify announcement is deleted
+      const checkRes = await request(`/api/announcements/${seedId}`);
+      assert.strictEqual(checkRes.statusCode, 404);
     });
   });
 });

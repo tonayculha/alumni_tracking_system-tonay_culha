@@ -41,6 +41,14 @@ This API is developed following clean architecture, layered separation of concer
       name: 'Users View (MVC)',
       description: 'Semantic HTML5 MVC View layer & interactive management portal (/users)',
     },
+    {
+      name: 'Announcements API (REST)',
+      description: 'RESTful JSON CRUD endpoints for Announcements (/api/announcements)',
+    },
+    {
+      name: 'Announcements View (MVC)',
+      description: 'Semantic HTML5 MVC View layer & interactive announcements management portal (/announcements)',
+    },
   ],
   components: {
     schemas: {
@@ -127,6 +135,119 @@ This API is developed following clean architecture, layered separation of concer
             type: 'string',
             description: 'Updated role',
             example: 'alumni',
+          },
+        },
+      },
+      Announcement: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            description: 'Unique system identifier (UUID)',
+            example: 'a1111111-1111-4111-a111-111111111111',
+          },
+          title: {
+            type: 'string',
+            description: 'Headline title of announcement',
+            example: 'Annual Alumni Homecoming 2026',
+          },
+          content: {
+            type: 'string',
+            description: 'Full textual content',
+            example: 'Join us for the Annual Alumni Homecoming Gala on campus.',
+          },
+          category: {
+            type: 'string',
+            enum: ['academic', 'career', 'social'],
+            description: 'Topic category',
+            example: 'social',
+          },
+          author: {
+            type: 'string',
+            description: 'Issuing department or organizer',
+            example: 'Alumni Relations Office',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'normal', 'urgent'],
+            description: 'Urgency level',
+            example: 'urgent',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-09-01T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-09-01T10:00:00.000Z',
+          },
+        },
+        required: ['id', 'title', 'content', 'category', 'author', 'priority', 'createdAt'],
+      },
+      CreateAnnouncementInput: {
+        type: 'object',
+        required: ['title', 'content', 'category', 'author'],
+        properties: {
+          title: {
+            type: 'string',
+            minLength: 3,
+            description: 'Headline title',
+            example: 'Annual Alumni Homecoming 2026',
+          },
+          content: {
+            type: 'string',
+            minLength: 5,
+            description: 'Full textual content',
+            example: 'Join us for the Annual Alumni Homecoming Gala on campus.',
+          },
+          category: {
+            type: 'string',
+            enum: ['academic', 'career', 'social'],
+            example: 'social',
+          },
+          author: {
+            type: 'string',
+            minLength: 2,
+            example: 'Alumni Relations Office',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'normal', 'urgent'],
+            default: 'normal',
+            example: 'normal',
+          },
+        },
+      },
+      UpdateAnnouncementInput: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            minLength: 3,
+            example: 'Updated Homecoming Date & Schedule',
+          },
+          content: {
+            type: 'string',
+            minLength: 5,
+            example: 'Updated details for the gala.',
+          },
+          category: {
+            type: 'string',
+            enum: ['academic', 'career', 'social'],
+            example: 'social',
+          },
+          author: {
+            type: 'string',
+            minLength: 2,
+            example: 'Alumni Relations Office',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'normal', 'urgent'],
+            example: 'urgent',
           },
         },
       },

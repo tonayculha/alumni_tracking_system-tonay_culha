@@ -22,9 +22,11 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
   - [1. Health Check (`GET /api/health`)](#1-health-check)
   - [2. In-Memory User CRUD (`/api/users`)](#2-in-memory-user-management-crud)
   - [3. Interactive MVC Users Portal (`GET /users`)](#3-interactive-mvc-users-portal)
-  - [4. Parametric Greeting (`GET /hello/:name`)](#4-parametric-greeting)
-  - [5. Calculation Endpoint (`GET /sum/:num1/:num2`)](#5-calculation-summation)
-  - [6. Semantic HTML Views](#6-semantic-html-views)
+  - [4. In-Memory Announcement CRUD (`/api/announcements`)](#4-in-memory-announcement-management-crud)
+  - [5. Interactive MVC Announcements Portal (`GET /announcements`)](#5-interactive-mvc-announcements-portal)
+  - [6. Parametric Greeting (`GET /hello/:name`)](#6-parametric-greeting)
+  - [7. Calculation Endpoint (`GET /sum/:num1/:num2`)](#7-calculation-summation)
+  - [8. Semantic HTML Views](#8-semantic-html-views)
 - [Local Development & Testing](#-local-development--testing)
 - [Environment Configuration](#-environment-configuration)
 - [Containerization Details](#-containerization-details)
@@ -105,14 +107,19 @@ The platform separates client concerns into two dedicated pipelines:
 | Layer | Component | File Path | Architectural Role & Responsibilities |
 | :--- | :--- | :--- | :--- |
 | **Model** | `UserModel` | `backend/src/models/user.model.js` | **In-Memory Domain Entity & Data Access Abstraction**<br>• Implements complete CRUD: `findAll`, `findById`, `findByEmail`, `create`, `update`, `delete`, `count`, `reset`.<br>• Enforces thread safety and defensive deep cloning immutability to prevent mutation leaks.<br>• Operates entirely in-memory without database connection per course rules. |
+| **Model** | `AnnouncementModel` | `backend/src/models/announcement.model.js` | **In-Memory Announcement Entity & Data Access**<br>• Implements complete CRUD: `findAll`, `findById`, `create`, `update`, `delete`, `count`, `reset`.<br>• Pre-seeded with 3 realistic bulletins (Homecoming, Career Fair, Tech Speaker Series).<br>• Defensive cloning (`_clone`) ensures immutability against outside reference mutations. |
 | **Model** | `InMemoryUserRepository` | `backend/src/repositories/inMemoryUser.repository.js` | **In-Memory Collection Store**<br>• Maintains thread-safe in-memory state and pre-seeded sample records (Ada Lovelace, Alan Turing, Grace Hopper, Margaret Hamilton). |
 | **View** | `Users View` | `backend/src/views/users.html` | **Interactive Browser-Based CRUD Portal (`GET /users`)**<br>• Responsive semantic HTML5 table with status/role badges.<br>• Real-time search by name/email and role filtering dropdown.<br>• Interactive modal forms for **User Creation** and **User Editing**.<br>• Delete confirmation dialog with reactive DOM removal and counter updates.<br>• Toast notification system for instant feedback.<br>• Dynamic server-side hydration placeholder (`<!-- INITIAL_USERS_DATA -->`) for zero-flash page loads. |
+| **View** | `Announcements View` | `backend/src/views/announcements.html` | **Interactive Browser-Based Announcements Portal (`GET /announcements`)**<br>• Card/grid layout with category (`academic`, `career`, `social`) and priority (`urgent`, `normal`, `low`) badges.<br>• Real-time keyword search and category filtering dropdown.<br>• Create modal (`POST /api/announcements`), Edit modal (`PUT /api/announcements/:id`), and Delete dialog.<br>• Server-side hydration placeholder (`<!-- INITIAL_ANNOUNCEMENTS_DATA -->`) and form-POST fallback. |
 | **View** | `Home View` | `backend/src/views/home.html` | **System Landing Page (`GET /home`)**<br>• Feature highlights, architecture overview, and endpoint links. |
 | **View** | `About View` | `backend/src/views/about.html` | **Architecture & Specifications View (`GET /about`)**<br>• Detailed technology stack table, philosophy, and endpoint directory. |
 | **View** | `Design System` | `backend/public/css/style.css` | **Unified Modern CSS Theme**<br>• Dark-mode slate palette, glassmorphism cards, responsive tables, badge variants, modal overlays, and toast animations. |
 | **Controller (View)** | `UserController` | `backend/src/controllers/user.controller.js` | **View Layer Orchestration (`/users`)**<br>• Serves semantic HTML views with embedded pre-hydrated state (`getUsersView`).<br>• Handles traditional browser form submissions (`POST /users`, `handleCreateUser`) and redirects.<br>• Handles form deletions (`POST /users/:id/delete`, `handleDeleteUser`) and detail routing (`getUserDetailView`). |
-| **Controller (API)** | `ApiUserController` | `backend/src/controllers/apiUser.controller.js` | **RESTful API Endpoint Orchestration (`/api/users`)**<br>• Returns pure JSON envelopes for REST clients (`getUsers`, `getUserById`, `createUser`, `updateUser`, `patchUser`, `deleteUser`).<br>• Enforces standard HTTP status codes (`200 OK`, `201 Created`, `400 Bad Request`, `404 Not Found`, `409 Conflict`). |
-| **Service Layer** | `UserService` | `backend/src/services/user.service.js` | **Business Logic & Validation**<br>• Email format regex validation, required field checks, duplicate email conflict detection (`409`), and payload sanitization. |
+| **Controller (View)** | `AnnouncementController` | `backend/src/controllers/announcement.controller.js` | **Announcements View Orchestration (`/announcements`)**<br>• Serves semantic HTML views with embedded pre-hydrated state (`getAnnouncementsView`).<br>• Handles traditional browser form submissions (`POST /announcements`, `handleCreateAnnouncement`) and redirects.<br>• Handles form deletions (`POST /announcements/:id/delete`) and detail routing. |
+| **Controller (API)** | `ApiUserController` | `backend/src/controllers/apiUser.controller.js` | **RESTful User API Endpoint Orchestration (`/api/users`)**<br>• Returns pure JSON envelopes for REST clients (`getUsers`, `getUserById`, `createUser`, `updateUser`, `patchUser`, `deleteUser`).<br>• Enforces standard HTTP status codes (`200 OK`, `201 Created`, `400 Bad Request`, `404 Not Found`, `409 Conflict`). |
+| **Controller (API)** | `ApiAnnouncementController` | `backend/src/controllers/apiAnnouncement.controller.js` | **RESTful Announcement API Endpoint Orchestration (`/api/announcements`)**<br>• Returns pure JSON envelopes for REST clients (`getAnnouncements`, `getAnnouncementById`, `createAnnouncement`, `updateAnnouncement`, `patchAnnouncement`, `deleteAnnouncement`).<br>• Enforces standard HTTP status codes (`200 OK`, `201 Created`, `400 Bad Request`, `404 Not Found`). |
+| **Service Layer** | `UserService` | `backend/src/services/user.service.js` | **User Business Logic & Validation**<br>• Email format regex validation, required field checks, duplicate email conflict detection (`409`), and payload sanitization. |
+| **Service Layer** | `AnnouncementService` | `backend/src/services/announcement.service.js` | **Announcement Business Logic & Validation**<br>• Enforces schema validation (`academic|career|social`, `low|normal|urgent`, title & content lengths). |
 
 ### 3. Route Dispatching Specification
 
@@ -195,10 +202,13 @@ The backend follows an enterprise modular 5-tier architecture:
     │   │   ├── env.js    # Centralized environment variable validator
     │   │   └── swagger.js # OpenAPI 3.0 specification definition
     │   ├── models/
-    │   │   └── user.model.js # [Model] In-memory user model & CRUD abstraction
+    │   │   ├── announcement.model.js # [Model] In-memory announcement model & CRUD
+    │   │   └── user.model.js         # [Model] In-memory user model & CRUD abstraction
     │   ├── controllers/
-    │   │   ├── apiUser.controller.js # [Controller: API] Handles JSON REST CRUD (/api/users)
-    │   │   ├── user.controller.js    # [Controller: View] Serves semantic HTML views (/users)
+    │   │   ├── announcement.controller.js    # [Controller: View] Serves announcements HTML view (/announcements)
+    │   │   ├── apiAnnouncement.controller.js # [Controller: API] Handles JSON REST CRUD (/api/announcements)
+    │   │   ├── apiUser.controller.js         # [Controller: API] Handles JSON REST CRUD (/api/users)
+    │   │   ├── user.controller.js            # [Controller: View] Serves semantic HTML views (/users)
     │   │   ├── greeting.controller.js
     │   │   ├── health.controller.js
     │   │   ├── info.controller.js
@@ -209,16 +219,19 @@ The backend follows an enterprise modular 5-tier architecture:
     │   ├── repositories/
     │   │   └── inMemoryUser.repository.js # Thread-safe in-memory store
     │   ├── routes/
-    │   │   ├── api.routes.js     # Aggregates /api routes (/api/users, /api/health)
-    │   │   ├── apiUser.routes.js # REST API routes for /api/users
-    │   │   ├── user.routes.js    # MVC View routes for /users
+    │   │   ├── announcement.routes.js    # MVC View routes for /announcements
+    │   │   ├── apiAnnouncement.routes.js # REST API routes for /api/announcements
+    │   │   ├── api.routes.js             # Aggregates /api routes (/api/users, /api/announcements, /api/health)
+    │   │   ├── apiUser.routes.js         # REST API routes for /api/users
+    │   │   ├── user.routes.js            # MVC View routes for /users
     │   │   ├── greeting.routes.js
-    │   │   ├── health.routes.js  # GET /health & GET /api/health
-    │   │   ├── index.js          # Main top-level router dispatcher
+    │   │   ├── health.routes.js          # GET /health & GET /api/health
+    │   │   ├── index.js                  # Main top-level router dispatcher
     │   │   ├── info.routes.js
     │   │   ├── math.routes.js
-    │   │   └── swagger.routes.js # Swagger UI (/api/swagger, /api/docs)
+    │   │   └── swagger.routes.js         # Swagger UI (/api/swagger, /api/docs)
     │   ├── services/
+    │   │   ├── announcement.service.js   # Announcement validation & business logic
     │   │   ├── greeting.service.js
     │   │   ├── health.service.js
     │   │   ├── math.service.js
@@ -227,11 +240,12 @@ The backend follows an enterprise modular 5-tier architecture:
     │   │   ├── logger.js
     │   │   └── responseFormatter.js
     │   └── views/
-    │       ├── users.html # [View] Interactive in-memory user CRUD management portal
-    │       ├── about.html # Semantic HTML architecture view
-    │       └── home.html  # Modern landing page with interactive API explorer
+    │       ├── announcements.html # [View] Interactive announcements management portal
+    │       ├── users.html         # [View] Interactive in-memory user CRUD management portal
+    │       ├── about.html         # Semantic HTML architecture view
+    │       └── home.html          # Modern landing page with interactive API explorer
     └── tests/
-        └── api.test.js   # 45 automated integration & unit tests (100% pass)
+        └── api.test.js   # 69 automated integration & unit tests (100% pass)
 ```
 
 ---
@@ -245,9 +259,11 @@ docker compose up --build
 ```
 
 Once running:
+- **Interactive Announcements Portal (MVC View)**: [http://localhost:3000/announcements](http://localhost:3000/announcements)
 - **Interactive Users Portal (MVC View)**: [http://localhost:3000/users](http://localhost:3000/users)
 - **Interactive Swagger Documentation**: [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) (also [http://localhost:3000/api/docs](http://localhost:3000/api/docs))
 - **Web Interface Landing Page**: [http://localhost:3000/home](http://localhost:3000/home)
+- **Announcements REST API (Pure JSON)**: [http://localhost:3000/api/announcements](http://localhost:3000/api/announcements)
 - **Users REST API (Pure JSON)**: [http://localhost:3000/api/users](http://localhost:3000/api/users)
 - **API Health Check**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 - **About / Technical Architecture**: [http://localhost:3000/about](http://localhost:3000/about)
@@ -382,7 +398,92 @@ The primary web-based interface for managing alumni records in the in-memory sto
 
 ---
 
-### 4. Parametric Greeting
+### 4. In-Memory Announcement Management CRUD (`/api/announcements`)
+
+#### Announcement Model
+```json
+{
+  "id": "a1111111-2222-4333-a444-555555555555",
+  "title": "Annual Alumni Homecoming & Reunion 2026",
+  "content": "Join us for the 25th Annual Alumni Homecoming on main campus. Network with past graduates, attend faculty seminars, and enjoy evening festivities.",
+  "category": "social",
+  "author": "Alumni Relations Office",
+  "priority": "urgent",
+  "createdAt": "2026-09-01T10:00:00.000Z",
+  "updatedAt": "2026-09-01T10:00:00.000Z"
+}
+```
+
+#### Endpoints
+
+| Method | Endpoint | Description | Status Code |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/announcements` | List all announcements with optional `?category=` and `?priority=` filters | `200 OK` |
+| `POST` | `/api/announcements` | Create announcement `{ title, content, category, author, priority }` | `201 Created` |
+| `GET` | `/api/announcements/:id` | Get announcement by UUID | `200 OK` / `404 Not Found` |
+| `PUT` | `/api/announcements/:id` | Full update of existing announcement | `200 OK` / `404 Not Found` |
+| `PATCH`| `/api/announcements/:id` | Partial update of existing announcement | `200 OK` / `404 Not Found` |
+| `DELETE`| `/api/announcements/:id` | Delete announcement from in-memory store | `200 OK` / `404 Not Found` |
+
+#### Example Usage
+
+**1. Create Announcement**:
+```bash
+curl -X POST http://localhost:3000/api/announcements \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AI & Big Data Alumni Panel 2026",
+    "content": "A high-level keynote and Q&A session with industry pioneers graduating from our department.",
+    "category": "academic",
+    "author": "Computer Science Department",
+    "priority": "urgent"
+  }'
+```
+
+**2. Filter by Category**:
+```bash
+curl -X GET "http://localhost:3000/api/announcements?category=career"
+```
+
+**3. Update Announcement**:
+```bash
+curl -X PUT http://localhost:3000/api/announcements/a1111111-2222-4333-a444-555555555555 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Annual Alumni Homecoming & Reunion 2026 (Updated Venue)",
+    "content": "Venue has moved to Grand Alumni Auditorium. Refreshments served.",
+    "category": "social",
+    "author": "Alumni Relations Office",
+    "priority": "urgent"
+  }'
+```
+
+**4. Delete Announcement**:
+```bash
+curl -X DELETE http://localhost:3000/api/announcements/a1111111-2222-4333-a444-555555555555
+```
+
+---
+
+### 5. Interactive MVC Announcements Portal (`GET /announcements`)
+
+The primary web-based interface for managing campus notices, career fairs, and alumni events.
+
+- **Route**: `GET /announcements` (served by `AnnouncementController`)
+- **Response**: `200 OK` (`Content-Type: text/html; charset=utf-8`)
+- **Key Capabilities**:
+  - **Dynamic Card Grid**: Visual card presentation displaying title, category badge (`academic`, `career`, `social`), priority badge (`urgent`, `normal`, `low`), preview content, author, and timestamp.
+  - **Live Search & Category Filtering**: Instant client-side filtering by keywords across title, content, or author, plus category dropdown selector.
+  - **Interactive Creation Modal**: Modal with real-time validation submitting to `POST /api/announcements`.
+  - **In-Place Edit Modal**: Populates existing bulletin fields for seamless updates via `PUT /api/announcements/:id`.
+  - **Detail View Modal**: Inspects complete announcement text and metadata in a read-only popup.
+  - **Safe Deletion Dialog**: Confirmation modal triggering `DELETE /api/announcements/:id` with reactive DOM card removal.
+  - **Real-Time Overview Metrics**: Live counters for Total Bulletins, Academic Notices, Career & Jobs, and Social & Alumni events.
+  - **Pre-Hydrated Zero-Flash Loading**: Pre-injected initial state via `<!-- INITIAL_ANNOUNCEMENTS_DATA -->`.
+
+---
+
+### 6. Parametric Greeting
 Accepts a name in the URL path and returns a personalized greeting.
 
 - **Route**: `GET /hello/:name`
@@ -398,7 +499,7 @@ Accepts a name in the URL path and returns a personalized greeting.
 
 ---
 
-### 5. Calculation (Summation)
+### 7. Calculation (Summation)
 Performs strict arithmetic addition with input validation and error diagnostics.
 
 - **Route**: `GET /sum/:number1/:number2`
@@ -415,9 +516,10 @@ Performs strict arithmetic addition with input validation and error diagnostics.
 
 ---
 
-### 6. Semantic HTML Views
+### 8. Semantic HTML Views
 Render modern, responsive, styled user interfaces.
 
+- **`GET /announcements`**: Interactive MVC Announcement Portal & Bulletin Board.
 - **`GET /users`**: Interactive MVC User Directory & Management Portal.
 - **`GET /home`**: Platform landing view, feature highlights, and interactive API links.
 - **`GET /about`**: Technical specifications, system architecture, and coursework details.
@@ -435,7 +537,7 @@ npm test
 
 **Test Results**:
 ```text
-✔ Alumni Tracking System API Test Suite (45 tests passed, 0 failures)
+✔ Alumni Tracking System API Test Suite (69 tests passed, 0 failures)
   ✔ Health Check Endpoints (Legacy Root) (2 tests)
   ✔ Parametric Greeting Endpoint (2 tests)
   ✔ Calculation Endpoint (6 tests)
@@ -446,6 +548,9 @@ npm test
   ✔ Week 3: In-Memory User CRUD Operations (/api/users) (13 tests)
   ✔ Week 4: MVC User View Layer (/users) (6 tests)
   ✔ Week 4: In-Memory UserModel Specification (8 tests)
+  ✔ Week 4 Homework: In-Memory Announcement Model Specification (7 tests)
+  ✔ Week 4 Homework: In-Memory Announcement CRUD Operations (/api/announcements) (11 tests)
+  ✔ Week 4 Homework: Announcement View Layer (/announcements) (6 tests)
 ```
 
 ---
