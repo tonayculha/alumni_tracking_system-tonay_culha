@@ -9,9 +9,10 @@ const swaggerDefinition = {
     description: `
 **Clean-room Modular Backend for Alumni Tracking System**
 
-This API is developed following clean architecture and modular design principles.
+This API is developed following clean architecture, layered separation of concerns, and MVC principles.
 - **Week 3 Milestone**: In-Memory User Management CRUD & Interactive Swagger UI.
-- All User CRUD operations use a dedicated in-memory data store with thread-safe defensive cloning and pre-populated seed data.
+- **Week 4 Milestone**: MVC Architectural Refactoring with In-Memory UserModel, Dual Controllers (\`ApiUserController\` for \`/api/users\` JSON REST vs \`UserController\` for \`/users\` semantic HTML view), and Interactive Browser-based CRUD Portal.
+- All User CRUD operations use a dedicated in-memory data store with thread-safe defensive cloning and pre-populated seed data, strictly without database connection per instructor specifications.
     `,
     contact: {
       name: 'Alumni Core Engineering Team',
@@ -19,12 +20,12 @@ This API is developed following clean architecture and modular design principles
   },
   servers: [
     {
-      url: '/api',
-      description: 'API base path (v1)',
+      url: '/',
+      description: 'Root base path (default)',
     },
     {
-      url: '/',
-      description: 'Root base path',
+      url: '/api',
+      description: 'API base path (v1)',
     },
   ],
   tags: [
@@ -33,8 +34,12 @@ This API is developed following clean architecture and modular design principles
       description: 'System health, uptime diagnostics, and status checks',
     },
     {
-      name: 'Users',
-      description: 'In-memory User CRUD management operations (Week 3)',
+      name: 'Users API (REST)',
+      description: 'RESTful JSON CRUD endpoints for programmatic clients (/api/users)',
+    },
+    {
+      name: 'Users View (MVC)',
+      description: 'Semantic HTML5 MVC View layer & interactive management portal (/users)',
     },
   ],
   components: {

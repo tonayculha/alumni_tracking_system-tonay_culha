@@ -1,4 +1,4 @@
-const { inMemoryUserRepository } = require('../repositories/inMemoryUser.repository');
+const { userModel } = require('../models/user.model');
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -68,7 +68,7 @@ function validateUserData(data, isPartial = false) {
  * @returns {Array<Object>}
  */
 const getAllUsers = () => {
-  return inMemoryUserRepository.findAll();
+  return userModel.findAll();
 };
 
 /**
@@ -77,7 +77,7 @@ const getAllUsers = () => {
  * @returns {Object}
  */
 const getUserById = (id) => {
-  const user = inMemoryUserRepository.findById(id);
+  const user = userModel.findById(id);
   if (!user) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -93,12 +93,12 @@ const createUser = ({ name, email, role }) => {
   validateUserData({ name, email, role }, false);
 
   const normalizedEmail = email.trim().toLowerCase();
-  const existing = inMemoryUserRepository.findByEmail(normalizedEmail);
+  const existing = userModel.findByEmail(normalizedEmail);
   if (existing) {
     throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
   }
 
-  return inMemoryUserRepository.create({ name, email: normalizedEmail, role });
+  return userModel.create({ name, email: normalizedEmail, role });
 };
 
 /**
@@ -108,7 +108,7 @@ const createUser = ({ name, email, role }) => {
  * @returns {Object}
  */
 const updateUser = (id, { name, email, role }) => {
-  const existing = inMemoryUserRepository.findById(id);
+  const existing = userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -117,13 +117,13 @@ const updateUser = (id, { name, email, role }) => {
 
   const normalizedEmail = email.trim().toLowerCase();
   if (normalizedEmail !== existing.email.toLowerCase()) {
-    const emailConflict = inMemoryUserRepository.findByEmail(normalizedEmail);
+    const emailConflict = userModel.findByEmail(normalizedEmail);
     if (emailConflict && emailConflict.id !== id) {
       throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
     }
   }
 
-  return inMemoryUserRepository.update(id, { name, email: normalizedEmail, role });
+  return userModel.update(id, { name, email: normalizedEmail, role });
 };
 
 /**
@@ -133,7 +133,7 @@ const updateUser = (id, { name, email, role }) => {
  * @returns {Object}
  */
 const patchUser = (id, fields) => {
-  const existing = inMemoryUserRepository.findById(id);
+  const existing = userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -160,7 +160,7 @@ const patchUser = (id, fields) => {
   if (updateData.email) {
     const normalizedEmail = updateData.email.trim().toLowerCase();
     if (normalizedEmail !== existing.email.toLowerCase()) {
-      const emailConflict = inMemoryUserRepository.findByEmail(normalizedEmail);
+      const emailConflict = userModel.findByEmail(normalizedEmail);
       if (emailConflict && emailConflict.id !== id) {
         throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
       }
@@ -168,7 +168,7 @@ const patchUser = (id, fields) => {
     updateData.email = normalizedEmail;
   }
 
-  return inMemoryUserRepository.update(id, updateData);
+  return userModel.update(id, updateData);
 };
 
 /**
@@ -177,19 +177,19 @@ const patchUser = (id, fields) => {
  * @returns {boolean}
  */
 const deleteUser = (id) => {
-  const existing = inMemoryUserRepository.findById(id);
+  const existing = userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
 
-  return inMemoryUserRepository.delete(id);
+  return userModel.delete(id);
 };
 
 /**
  * Reset store to seed data (useful for test isolation)
  */
 const resetUsers = () => {
-  inMemoryUserRepository.reset();
+  userModel.reset();
 };
 
 module.exports = {

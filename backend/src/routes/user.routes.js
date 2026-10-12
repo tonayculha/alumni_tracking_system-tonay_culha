@@ -8,60 +8,54 @@ const router = express.Router();
  * /users:
  *   get:
  *     tags:
- *       - Users
- *     summary: Retrieve all users
- *     description: Returns an array of all active users in the in-memory store.
+ *       - Users View (MVC)
+ *     summary: Render User Management Portal (HTML View)
+ *     description: Serves the semantic HTML5 view for interactive in-browser user management, role inspection, and CRUD operations.
  *     responses:
  *       200:
- *         description: A list of users.
+ *         description: Semantic HTML user management dashboard.
  *         content:
- *           application/json:
+ *           text/html:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/User'
+ *               type: string
+ *               example: "<!DOCTYPE html><html><head><title>Alumni Tracking System | Users</title>..."
  *   post:
  *     tags:
- *       - Users
- *     summary: Create a new user
- *     description: Validates and creates a new user, assigning a unique UUID and persisting in memory.
+ *       - Users View (MVC)
+ *     summary: Handle User Creation Form Submission
+ *     description: Accepts standard HTML form submissions or AJAX payloads to create a new user and redirects or returns the result.
  *     requestBody:
  *       required: true
  *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateUserInput'
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/CreateUserInput'
  *     responses:
+ *       302:
+ *         description: Redirects back to /users on successful form submission.
  *       201:
- *         description: User created successfully.
+ *         description: User created (AJAX clients).
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/User'
  *       400:
- *         description: Invalid input or missing required fields.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: User with provided email already exists.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *         description: Validation error.
  */
-router.get('/', userController.getUsers);
-router.post('/', userController.createUser);
+router.get('/', userController.getUsersView);
+router.post('/', userController.handleCreateUser);
 
 /**
  * @openapi
  * /users/{id}:
  *   get:
  *     tags:
- *       - Users
- *     summary: Get a user by ID
- *     description: Retrieves details of a specific user matching the supplied UUID.
+ *       - Users View (MVC)
+ *     summary: Inspect User Detail HTML View
+ *     description: Renders the details of a specific user or redirects to the dashboard with highlighting for the selected user.
  *     parameters:
  *       - in: path
  *         name: id
@@ -72,145 +66,14 @@ router.post('/', userController.createUser);
  *         description: Unique UUID of the user
  *     responses:
  *       200:
- *         description: User found and returned.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
+ *         description: User detail view or JSON representation.
+ *       302:
+ *         description: Redirects to /users with view query parameter.
  *       404:
  *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *   put:
- *     tags:
- *       - Users
- *     summary: Full update of an existing user
- *     description: Replaces all mutable attributes (name, email, role) of the user matching the supplied ID.
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Unique UUID of the user
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateUserInput'
- *     responses:
- *       200:
- *         description: User updated successfully.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       400:
- *         description: Validation failed.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Email conflict with another user.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *   patch:
- *     tags:
- *       - Users
- *     summary: Partial update of an existing user
- *     description: Modifies one or more fields (name, email, or role) of the user matching the supplied ID.
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Unique UUID of the user
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateUserInput'
- *     responses:
- *       200:
- *         description: User updated successfully.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/User'
- *       400:
- *         description: Validation failed.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Email conflict with another user.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *   delete:
- *     tags:
- *       - Users
- *     summary: Delete a user by ID
- *     description: Permanently removes the user matching the supplied ID from the in-memory store.
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Unique UUID of the user
- *     responses:
- *       200:
- *         description: User deleted successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: string
- *                   example: success
- *                 message:
- *                   type: string
- *                   example: User deleted successfully
- *                 id:
- *                   type: string
- *                   example: 11111111-1111-4111-a111-111111111111
- *       404:
- *         description: User not found.
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', userController.getUserById);
-router.put('/:id', userController.updateUser);
-router.patch('/:id', userController.patchUser);
-router.delete('/:id', userController.deleteUser);
+router.get('/:id', userController.getUserDetailView);
+router.post('/:id/delete', userController.handleDeleteUser);
+router.delete('/:id', userController.handleDeleteUser);
 
 module.exports = router;

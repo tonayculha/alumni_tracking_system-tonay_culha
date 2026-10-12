@@ -8,6 +8,7 @@ process.env.PORT = '3001';
 
 const app = require('../src/app');
 const { resetUsers } = require('../src/services/user.service');
+const { userModel, UserModel } = require('../src/models/user.model');
 
 describe('Alumni Tracking System API Test Suite', () => {
   let server;
@@ -249,8 +250,13 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(spec.info.title, 'Alumni Tracking System API');
       assert.ok(spec.paths['/users'], 'paths must contain /users');
       assert.ok(spec.paths['/users/{id}'], 'paths must contain /users/{id}');
+      assert.ok(spec.paths['/api/users'], 'paths must contain /api/users');
+      assert.ok(spec.paths['/api/users/{id}'], 'paths must contain /api/users/{id}');
       assert.ok(spec.components.schemas.User, 'schemas must contain User model');
       assert.ok(spec.components.schemas.CreateUserInput, 'schemas must contain CreateUserInput');
+      const tagNames = spec.tags.map((t) => t.name);
+      assert.ok(tagNames.includes('Users API (REST)'), 'tags must contain Users API (REST)');
+      assert.ok(tagNames.includes('Users View (MVC)'), 'tags must contain Users View (MVC)');
     });
   });
 
@@ -438,6 +444,169 @@ describe('Alumni Tracking System API Test Suite', () => {
       // Re-fetch to ensure internal store was not mutated
       const reFetch = await request(`/api/users/${users[0].id}`);
       assert.notStrictEqual(reFetch.json().name, 'Hacked Name In Memory');
+    });
+  });
+
+  // ==========================================
+  // Week 4 Requirements: MVC User Views & Dual Controller
+  // ==========================================
+  describe('Week 4: MVC User View Layer (/users)', () => {
+    beforeEach(() => {
+      resetUsers();
+    });
+
+    test('GET /users returns 200 with semantic HTML page and pre-hydrated users', async () => {
+      const res = await request('/users');
+      assert.strictEqual(res.statusCode, 200);
+      assert.match(res.headers['content-type'], /html/);
+      assert.match(res.body, /<title>Alumni Tracking System \| Users<\/title>/);
+      assert.match(res.body, /User Directory &amp; Management|User Directory/);
+      assert.match(res.body, /<table id="users-table">/);
+      assert.match(res.body, /Ada Lovelace/);
+      assert.match(res.body, /<header>/);
+      assert.match(res.body, /<main>/);
+      assert.match(res.body, /<footer>/);
+    });
+
+    test('POST /users with urlencoded form submission creates user and redirects (302)', async () => {
+      const formPayload = 'name=Katherine+Johnson&email=katherine%40alumni.edu&role=faculty';
+      const res = await apiRequest('POST', '/users', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/users\?status=created/);
+
+      // Verify user was persisted
+      const listRes = await request('/api/users');
+      const users = listRes.json();
+      assert.ok(users.some((u) => u.email === 'katherine@alumni.edu'));
+    });
+
+    test('POST /users with invalid form data redirects with error parameter (302)', async () => {
+      const formPayload = 'name=A&email=invalid-email&role=student';
+      const res = await apiRequest('POST', '/users', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/users\?error=/);
+    });
+
+    test('GET /users/:id with HTML accept header redirects to view query (302)', async () => {
+      const seedId = '11111111-1111-4111-a111-111111111111';
+      const res = await request(`/users/${seedId}`, { Accept: 'text/html' });
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, new RegExp(`/users\\?view=${seedId}`));
+    });
+
+    test('GET /users/:id with non-existent ID returns 404', async () => {
+      const res = await request('/users/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /users/:id/delete with form action deletes user and redirects (302)', async () => {
+      const seedId = '33333333-3333-4333-a333-333333333333';
+      const res = await apiRequest('POST', `/users/${seedId}/delete`, '', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/users\?status=deleted/);
+
+      // Verify user is deleted
+      const checkRes = await request(`/api/users/${seedId}`);
+      assert.strictEqual(checkRes.statusCode, 404);
+    });
+  });
+
+  // ==========================================
+  // Week 4 Requirements: In-Memory UserModel Specification
+  // ==========================================
+  describe('Week 4: In-Memory UserModel Specification', () => {
+    beforeEach(() => {
+      userModel.reset();
+    });
+
+    test('UserModel.findAll returns all seed users defensively cloned', () => {
+      const users = userModel.findAll();
+      assert.ok(Array.isArray(users));
+      assert.ok(users.length >= 3);
+      assert.strictEqual(users.length, userModel.count());
+    });
+
+    test('UserModel.findById returns target user or null', () => {
+      const user = userModel.findById('11111111-1111-4111-a111-111111111111');
+      assert.ok(user);
+      assert.strictEqual(user.name, 'Ada Lovelace');
+
+      const nonExistent = userModel.findById('non-existent-id');
+      assert.strictEqual(nonExistent, null);
+    });
+
+    test('UserModel.findByEmail performs case-insensitive lookup', () => {
+      const user = userModel.findByEmail('ADA.LOVELACE@ALUMNI.EDU');
+      assert.ok(user);
+      assert.strictEqual(user.id, '11111111-1111-4111-a111-111111111111');
+
+      const notFound = userModel.findByEmail('missing@alumni.edu');
+      assert.strictEqual(notFound, null);
+    });
+
+    test('UserModel.create generates record and increments count', () => {
+      const initialCount = userModel.count();
+      const created = userModel.create({
+        name: 'John von Neumann',
+        email: 'neumann@alumni.edu',
+        role: 'faculty',
+      });
+
+      assert.ok(created.id);
+      assert.strictEqual(created.name, 'John von Neumann');
+      assert.strictEqual(userModel.count(), initialCount + 1);
+
+      const fetched = userModel.findById(created.id);
+      assert.strictEqual(fetched.name, 'John von Neumann');
+    });
+
+    test('UserModel.update modifies properties and updates timestamp', () => {
+      const updated = userModel.update('22222222-2222-4222-a222-222222222222', {
+        name: 'Alan M. Turing',
+        role: 'fellow',
+      });
+
+      assert.ok(updated);
+      assert.strictEqual(updated.name, 'Alan M. Turing');
+      assert.strictEqual(updated.role, 'fellow');
+
+      const fetched = userModel.findById('22222222-2222-4222-a222-222222222222');
+      assert.strictEqual(fetched.name, 'Alan M. Turing');
+    });
+
+    test('UserModel.delete removes record and decrements count', () => {
+      const initialCount = userModel.count();
+      const success = userModel.delete('11111111-1111-4111-a111-111111111111');
+      assert.strictEqual(success, true);
+      assert.strictEqual(userModel.count(), initialCount - 1);
+      assert.strictEqual(userModel.findById('11111111-1111-4111-a111-111111111111'), null);
+
+      const failed = userModel.delete('non-existent');
+      assert.strictEqual(failed, false);
+    });
+
+    test('UserModel enforces strict immutability against external mutations', () => {
+      const users = userModel.findAll();
+      users[0].name = 'Tampered Directly In Memory';
+
+      const verify = userModel.findById(users[0].id);
+      assert.notStrictEqual(verify.name, 'Tampered Directly In Memory');
+    });
+
+    test('UserModel static methods delegate properly to singleton instance', () => {
+      assert.strictEqual(typeof UserModel.findAll, 'function');
+      const staticUsers = UserModel.findAll();
+      assert.ok(Array.isArray(staticUsers));
+      assert.strictEqual(UserModel.count(), userModel.count());
     });
   });
 });

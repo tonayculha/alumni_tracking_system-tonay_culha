@@ -13,6 +13,7 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
 ## 📖 Table of Contents
 
 - [Project Philosophy](#-project-philosophy)
+- [MVC Architecture Specification](#-mvc-architecture-specification)
 - [Architecture & Layering](#-architecture--layering)
 - [Directory Structure](#-directory-structure)
 - [Quick Start: The One-Command Rule](#-quick-start-the-one-command-rule)
@@ -20,9 +21,10 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
 - [API Reference & Contract](#-api-reference--contract)
   - [1. Health Check (`GET /api/health`)](#1-health-check)
   - [2. In-Memory User CRUD (`/api/users`)](#2-in-memory-user-management-crud)
-  - [3. Parametric Greeting (`GET /hello/:name`)](#3-parametric-greeting)
-  - [4. Calculation Endpoint (`GET /sum/:num1/:num2`)](#4-calculation-summation)
-  - [5. Semantic HTML Views](#5-semantic-html-views)
+  - [3. Interactive MVC Users Portal (`GET /users`)](#3-interactive-mvc-users-portal)
+  - [4. Parametric Greeting (`GET /hello/:name`)](#4-parametric-greeting)
+  - [5. Calculation Endpoint (`GET /sum/:num1/:num2`)](#5-calculation-summation)
+  - [6. Semantic HTML Views](#6-semantic-html-views)
 - [Local Development & Testing](#-local-development--testing)
 - [Environment Configuration](#-environment-configuration)
 - [Containerization Details](#-containerization-details)
@@ -36,9 +38,86 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
    ```bash
    docker compose up --build
    ```
-3. **Instructor Milestone Isolation (Week 3)**: As required by the instructor (*"don't use any database yet"*), all User Management CRUD operations utilize a dedicated thread-safe in-memory data store with deep cloning immutability and pre-seeded sample data, strictly decoupled from persistent tables.
-4. **Layered Separation of Concerns**: Strict decoupling across Routes, Controllers, Services, Repositories, and Config layers.
+3. **Instructor Milestone Isolation (Week 3 & 4)**: As required by the instructor (*"without database connection / in-memory only"*), all User Management CRUD operations utilize a dedicated thread-safe in-memory data store with deep cloning immutability and pre-seeded sample data, strictly decoupled from persistent tables.
+4. **MVC Architecture & Dual Controller Routing (Week 4)**: Clear separation of concerns between user-facing browser views and machine-facing REST APIs. Implements an in-memory `UserModel` (`backend/src/models/user.model.js`), dual controllers (`ApiUserController` for pure JSON REST vs `UserController` for semantic HTML view rendering), and an interactive browser-based user management portal at `/users`.
 5. **Interactive OpenAPI 3.0 Documentation**: Fully interactive Swagger UI exposed at `/api/swagger` and `/api/docs` allowing instant endpoint discovery and browser testing.
+
+---
+
+## 🏛️ MVC Architecture Specification
+
+The Alumni Tracking System enforces a strict **Model-View-Controller (MVC)** architectural design, augmented with Service and In-Memory Repository layers for enterprise separation of concerns and deterministic testing.
+
+### 1. Dual Controller & Route Architecture
+
+The platform separates client concerns into two dedicated pipelines:
+
+```
+                            ┌───────────────────────────┐
+                            │   HTTP Client / Browser   │
+                            └─────────────┬─────────────┘
+                                          │
+                    ┌─────────────────────┴─────────────────────┐
+                    │                                           │
+           [GET /users View Route]                     [GET /api/users REST Route]
+                    │                                           │
+                    ▼                                           ▼
+        ┌───────────────────────┐                   ┌───────────────────────┐
+        │    UserController     │                   │   ApiUserController   │
+        │ (src/controllers/     │                   │  (src/controllers/    │
+        │   user.controller.js) │                   │ apiUser.controller.js)│
+        └───────────┬───────────┘                   └───────────┬───────────┘
+                    │                                           │
+                    ▼                                           ▼
+        ┌───────────────────────┐                   ┌───────────────────────┐
+        │      View Layer       │                   │      JSON Envelope    │
+        │  (src/views/users.html│                   │   (RESTful Responses  │
+        │   + public/css/       │                   │    200, 201, 400, 404)│
+        │     style.css)        │                   └───────────┬───────────┘
+        └───────────┬───────────┘                               │
+                    │                                           │
+                    └─────────────────────┬─────────────────────┘
+                                          │
+                                          ▼
+                              ┌───────────────────────┐
+                              │      UserService      │
+                              │ (src/services/        │
+                              │   user.service.js)    │
+                              └───────────┬───────────┘
+                                          │
+                                          ▼
+                              ┌───────────────────────┐
+                              │       UserModel       │
+                              │  (src/models/         │
+                              │    user.model.js)     │
+                              └───────────┬───────────┘
+                                          │
+                                          ▼
+                              ┌───────────────────────┐
+                              │ In-Memory Repository  │
+                              │ (src/repositories/    │
+                              │   inMemoryUser.repo)  │
+                              └───────────────────────┘
+```
+
+### 2. Exact Mapping of Models, Views & Controllers
+
+| Layer | Component | File Path | Architectural Role & Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Model** | `UserModel` | `backend/src/models/user.model.js` | **In-Memory Domain Entity & Data Access Abstraction**<br>• Implements complete CRUD: `findAll`, `findById`, `findByEmail`, `create`, `update`, `delete`, `count`, `reset`.<br>• Enforces thread safety and defensive deep cloning immutability to prevent mutation leaks.<br>• Operates entirely in-memory without database connection per course rules. |
+| **Model** | `InMemoryUserRepository` | `backend/src/repositories/inMemoryUser.repository.js` | **In-Memory Collection Store**<br>• Maintains thread-safe in-memory state and pre-seeded sample records (Ada Lovelace, Alan Turing, Grace Hopper, Margaret Hamilton). |
+| **View** | `Users View` | `backend/src/views/users.html` | **Interactive Browser-Based CRUD Portal (`GET /users`)**<br>• Responsive semantic HTML5 table with status/role badges.<br>• Real-time search by name/email and role filtering dropdown.<br>• Interactive modal forms for **User Creation** and **User Editing**.<br>• Delete confirmation dialog with reactive DOM removal and counter updates.<br>• Toast notification system for instant feedback.<br>• Dynamic server-side hydration placeholder (`<!-- INITIAL_USERS_DATA -->`) for zero-flash page loads. |
+| **View** | `Home View` | `backend/src/views/home.html` | **System Landing Page (`GET /home`)**<br>• Feature highlights, architecture overview, and endpoint links. |
+| **View** | `About View` | `backend/src/views/about.html` | **Architecture & Specifications View (`GET /about`)**<br>• Detailed technology stack table, philosophy, and endpoint directory. |
+| **View** | `Design System` | `backend/public/css/style.css` | **Unified Modern CSS Theme**<br>• Dark-mode slate palette, glassmorphism cards, responsive tables, badge variants, modal overlays, and toast animations. |
+| **Controller (View)** | `UserController` | `backend/src/controllers/user.controller.js` | **View Layer Orchestration (`/users`)**<br>• Serves semantic HTML views with embedded pre-hydrated state (`getUsersView`).<br>• Handles traditional browser form submissions (`POST /users`, `handleCreateUser`) and redirects.<br>• Handles form deletions (`POST /users/:id/delete`, `handleDeleteUser`) and detail routing (`getUserDetailView`). |
+| **Controller (API)** | `ApiUserController` | `backend/src/controllers/apiUser.controller.js` | **RESTful API Endpoint Orchestration (`/api/users`)**<br>• Returns pure JSON envelopes for REST clients (`getUsers`, `getUserById`, `createUser`, `updateUser`, `patchUser`, `deleteUser`).<br>• Enforces standard HTTP status codes (`200 OK`, `201 Created`, `400 Bad Request`, `404 Not Found`, `409 Conflict`). |
+| **Service Layer** | `UserService` | `backend/src/services/user.service.js` | **Business Logic & Validation**<br>• Email format regex validation, required field checks, duplicate email conflict detection (`409`), and payload sanitization. |
+
+### 3. Route Dispatching Specification
+
+- **`/users` (MVC View Route)**: Handled by `UserController` (`backend/src/routes/user.routes.js` mounted directly in `backend/src/routes/index.js`). Returns semantic HTML5 pages for human interaction.
+- **`/api/users` (REST API Route)**: Handled by `ApiUserController` (`backend/src/routes/apiUser.routes.js` mounted in `backend/src/routes/api.routes.js`). Returns pure JSON responses for programmatic clients and Swagger UI.
 
 ---
 
@@ -107,7 +186,7 @@ The backend follows an enterprise modular 5-tier architecture:
     ├── package-lock.json # Deterministic dependency lockfile
     ├── public/           # Static assets (stylesheets, branding)
     │   └── css/
-    │       └── style.css
+    │       └── style.css # Unified design system (dark-mode, badges, modals, toasts)
     ├── src/
     │   ├── app.js        # Express application configuration & middlewares
     │   ├── server.js     # Server bootstrap & graceful shutdown handler
@@ -115,26 +194,30 @@ The backend follows an enterprise modular 5-tier architecture:
     │   │   ├── db.js     # PostgreSQL connection pool & health ping
     │   │   ├── env.js    # Centralized environment variable validator
     │   │   └── swagger.js # OpenAPI 3.0 specification definition
+    │   ├── models/
+    │   │   └── user.model.js # [Model] In-memory user model & CRUD abstraction
     │   ├── controllers/
+    │   │   ├── apiUser.controller.js # [Controller: API] Handles JSON REST CRUD (/api/users)
+    │   │   ├── user.controller.js    # [Controller: View] Serves semantic HTML views (/users)
     │   │   ├── greeting.controller.js
     │   │   ├── health.controller.js
     │   │   ├── info.controller.js
-    │   │   ├── math.controller.js
-    │   │   └── user.controller.js
+    │   │   └── math.controller.js
     │   ├── middlewares/
     │   │   ├── errorHandler.js
     │   │   └── notFoundHandler.js
     │   ├── repositories/
     │   │   └── inMemoryUser.repository.js # Thread-safe in-memory store
     │   ├── routes/
-    │   │   ├── api.routes.js    # Aggregates /api routes (Week 3)
+    │   │   ├── api.routes.js     # Aggregates /api routes (/api/users, /api/health)
+    │   │   ├── apiUser.routes.js # REST API routes for /api/users
+    │   │   ├── user.routes.js    # MVC View routes for /users
     │   │   ├── greeting.routes.js
-    │   │   ├── health.routes.js # GET /health & GET /api/health
-    │   │   ├── index.js         # Main router
+    │   │   ├── health.routes.js  # GET /health & GET /api/health
+    │   │   ├── index.js          # Main top-level router dispatcher
     │   │   ├── info.routes.js
     │   │   ├── math.routes.js
-    │   │   ├── swagger.routes.js # Swagger UI (/api/swagger, /api/docs)
-    │   │   └── user.routes.js   # In-memory User CRUD endpoints
+    │   │   └── swagger.routes.js # Swagger UI (/api/swagger, /api/docs)
     │   ├── services/
     │   │   ├── greeting.service.js
     │   │   ├── health.service.js
@@ -144,10 +227,11 @@ The backend follows an enterprise modular 5-tier architecture:
     │   │   ├── logger.js
     │   │   └── responseFormatter.js
     │   └── views/
-    │       ├── about.html # Semantic HTML view
-    │       └── home.html  # Modern landing page with API explorer
+    │       ├── users.html # [View] Interactive in-memory user CRUD management portal
+    │       ├── about.html # Semantic HTML architecture view
+    │       └── home.html  # Modern landing page with interactive API explorer
     └── tests/
-        └── api.test.js   # 31 automated integration tests (100% pass)
+        └── api.test.js   # 45 automated integration & unit tests (100% pass)
 ```
 
 ---
@@ -161,11 +245,12 @@ docker compose up --build
 ```
 
 Once running:
+- **Interactive Users Portal (MVC View)**: [http://localhost:3000/users](http://localhost:3000/users)
 - **Interactive Swagger Documentation**: [http://localhost:3000/api/swagger](http://localhost:3000/api/swagger) (also [http://localhost:3000/api/docs](http://localhost:3000/api/docs))
-- **Web Interface**: [http://localhost:3000/home](http://localhost:3000/home)
-- **API Health**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
-- **Users API**: [http://localhost:3000/api/users](http://localhost:3000/api/users)
-- **About / Architecture**: [http://localhost:3000/about](http://localhost:3000/about)
+- **Web Interface Landing Page**: [http://localhost:3000/home](http://localhost:3000/home)
+- **Users REST API (Pure JSON)**: [http://localhost:3000/api/users](http://localhost:3000/api/users)
+- **API Health Check**: [http://localhost:3000/api/health](http://localhost:3000/api/health)
+- **About / Technical Architecture**: [http://localhost:3000/about](http://localhost:3000/about)
 
 ---
 
@@ -280,7 +365,24 @@ curl -X DELETE http://localhost:3000/api/users/11111111-1111-4111-a111-111111111
 
 ---
 
-### 3. Parametric Greeting
+### 3. Interactive MVC Users Portal (`GET /users`)
+
+The primary web-based interface for managing alumni records in the in-memory store.
+
+- **Route**: `GET /users` (served by `UserController`)
+- **Response**: `200 OK` (`Content-Type: text/html; charset=utf-8`)
+- **Key Capabilities**:
+  - **Pre-Hydrated Table**: Embeds server-side user data into the HTML template on first load for zero latency.
+  - **Live Search & Filter**: Real-time filtering by name, email, and system role (`admin`, `alumni`, `student`, `faculty`).
+  - **Modal Creation**: Interactive modal to create new users directly against `/api/users` (with fallback support for standard form `POST /users`).
+  - **In-Place Edit**: Interactive modal to update existing user names, emails, and roles via `PUT /api/users/:id`.
+  - **Safe Deletion**: Confirmation dialog that triggers `DELETE /api/users/:id` and optimistically removes rows.
+  - **Real-Time Statistics**: Live dynamic counts for Total Users, Administrators, Alumni, and Students.
+  - **Toast Notifications**: Reactive feedback popups on success or failure.
+
+---
+
+### 4. Parametric Greeting
 Accepts a name in the URL path and returns a personalized greeting.
 
 - **Route**: `GET /hello/:name`
@@ -296,7 +398,7 @@ Accepts a name in the URL path and returns a personalized greeting.
 
 ---
 
-### 4. Calculation (Summation)
+### 5. Calculation (Summation)
 Performs strict arithmetic addition with input validation and error diagnostics.
 
 - **Route**: `GET /sum/:number1/:number2`
@@ -313,9 +415,10 @@ Performs strict arithmetic addition with input validation and error diagnostics.
 
 ---
 
-### 5. Semantic HTML Views
+### 6. Semantic HTML Views
 Render modern, responsive, styled user interfaces.
 
+- **`GET /users`**: Interactive MVC User Directory & Management Portal.
 - **`GET /home`**: Platform landing view, feature highlights, and interactive API links.
 - **`GET /about`**: Technical specifications, system architecture, and coursework details.
 
@@ -332,7 +435,7 @@ npm test
 
 **Test Results**:
 ```text
-✔ Alumni Tracking System API Test Suite (31 tests passed, 0 failures)
+✔ Alumni Tracking System API Test Suite (45 tests passed, 0 failures)
   ✔ Health Check Endpoints (Legacy Root) (2 tests)
   ✔ Parametric Greeting Endpoint (2 tests)
   ✔ Calculation Endpoint (6 tests)
@@ -341,6 +444,8 @@ npm test
   ✔ Week 3: Health Check Endpoint (/api/health) (1 test)
   ✔ Week 3: Swagger / OpenAPI Documentation (4 tests)
   ✔ Week 3: In-Memory User CRUD Operations (/api/users) (13 tests)
+  ✔ Week 4: MVC User View Layer (/users) (6 tests)
+  ✔ Week 4: In-Memory UserModel Specification (8 tests)
 ```
 
 ---

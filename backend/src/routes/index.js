@@ -4,11 +4,15 @@ const greetingRoutes = require('./greeting.routes');
 const mathRoutes = require('./math.routes');
 const infoRoutes = require('./info.routes');
 const apiRoutes = require('./api.routes');
+const userRoutes = require('./user.routes');
 
 const router = express.Router();
 
-// Mount Week 3 API routes under /api prefix (/api/health, /api/users, /api/swagger, /api/docs)
+// Mount Week 3 & 4 API routes under /api prefix (/api/health, /api/users, /api/swagger, /api/docs)
 router.use('/api', apiRoutes);
+
+// Mount Week 4 MVC User View routes under /users (Semantic HTML view, UserController)
+router.use('/users', userRoutes);
 
 // Root redirects for documentation convenience
 router.get('/docs', (req, res) => res.redirect('/api/docs'));
