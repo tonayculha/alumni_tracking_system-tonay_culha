@@ -20,6 +20,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
+        upgradeInsecureRequests: null,
       },
     },
   })
@@ -39,6 +40,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static assets (CSS, images, icons)
 app.use(express.static(path.resolve(__dirname, '../public')));
+app.use('/css', express.static(path.resolve(__dirname, '../public/css')));
 
 // Mount application routes
 app.use(routes);
