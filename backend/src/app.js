@@ -19,6 +19,8 @@ app.use(
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcElem: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
         upgradeInsecureRequests: null,
       },

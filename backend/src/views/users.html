@@ -38,7 +38,7 @@
         Create, edit, inspect, and remove alumni records with real-time UI state synchronization.
       </p>
       <div class="btn-group">
-        <button id="open-create-btn" class="btn btn-primary" onclick="openCreateModal()">
+        <button id="btnAddUser" class="btn btn-primary" onclick="openCreateModal()">
           ➕ Add New User
         </button>
         <a href="/api/users" class="btn btn-secondary" target="_blank">
@@ -124,11 +124,11 @@
   <!-- ========================================================================= -->
   <!-- MODAL: CREATE USER -->
   <!-- ========================================================================= -->
-  <div id="create-modal" class="modal-overlay" onclick="handleBackdropClick(event, 'create-modal')">
+  <div id="modalCreateUser" class="modal-overlay" data-modal="create-modal" onclick="handleBackdropClick(event, 'modalCreateUser')">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">Create New User</h3>
-        <button class="modal-close" onclick="closeModal('create-modal')">&times;</button>
+        <button class="modal-close" data-close-modal="modalCreateUser" onclick="closeModal('modalCreateUser')">&times;</button>
       </div>
       <form id="create-user-form" action="/users" method="POST" onsubmit="handleCreateSubmit(event)">
         <div class="modal-body">
@@ -154,7 +154,7 @@
           <div id="create-general-error" class="form-error" style="display: none; margin-top: 0.5rem;"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-view" onclick="closeModal('create-modal')">Cancel</button>
+          <button type="button" class="btn-sm btn-view" data-close-modal="modalCreateUser" onclick="closeModal('modalCreateUser')">Cancel</button>
           <button type="submit" id="create-submit-btn" class="btn-sm btn-edit" style="background: var(--primary); color: #fff;">
             Save User
           </button>
@@ -166,11 +166,11 @@
   <!-- ========================================================================= -->
   <!-- MODAL: EDIT USER -->
   <!-- ========================================================================= -->
-  <div id="edit-modal" class="modal-overlay" onclick="handleBackdropClick(event, 'edit-modal')">
+  <div id="modalEditUser" class="modal-overlay" data-modal="edit-modal" onclick="handleBackdropClick(event, 'modalEditUser')">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">Edit User</h3>
-        <button class="modal-close" onclick="closeModal('edit-modal')">&times;</button>
+        <button class="modal-close" data-close-modal="modalEditUser" onclick="closeModal('modalEditUser')">&times;</button>
       </div>
       <form id="edit-user-form" onsubmit="handleEditSubmit(event)">
         <input type="hidden" id="edit-id" name="id">
@@ -197,7 +197,7 @@
           <div id="edit-general-error" class="form-error" style="display: none; margin-top: 0.5rem;"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-view" onclick="closeModal('edit-modal')">Cancel</button>
+          <button type="button" class="btn-sm btn-view" data-close-modal="modalEditUser" onclick="closeModal('modalEditUser')">Cancel</button>
           <button type="submit" id="edit-submit-btn" class="btn-sm btn-edit" style="background: var(--primary); color: #fff;">
             Update User
           </button>
@@ -209,11 +209,11 @@
   <!-- ========================================================================= -->
   <!-- MODAL: VIEW USER DETAIL -->
   <!-- ========================================================================= -->
-  <div id="view-modal" class="modal-overlay" onclick="handleBackdropClick(event, 'view-modal')">
+  <div id="modalViewUser" class="modal-overlay" data-modal="view-modal" onclick="handleBackdropClick(event, 'modalViewUser')">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">User Details</h3>
-        <button class="modal-close" onclick="closeModal('view-modal')">&times;</button>
+        <button class="modal-close" data-close-modal="modalViewUser" onclick="closeModal('modalViewUser')">&times;</button>
       </div>
       <div class="modal-body">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
@@ -243,7 +243,7 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-sm btn-view" onclick="closeModal('view-modal')">Close</button>
+        <button type="button" class="btn-sm btn-view" data-close-modal="modalViewUser" onclick="closeModal('modalViewUser')">Close</button>
       </div>
     </div>
   </div>
@@ -251,11 +251,11 @@
   <!-- ========================================================================= -->
   <!-- MODAL: DELETE CONFIRMATION -->
   <!-- ========================================================================= -->
-  <div id="delete-modal" class="modal-overlay" onclick="handleBackdropClick(event, 'delete-modal')">
+  <div id="modalDeleteUser" class="modal-overlay" data-modal="delete-modal" onclick="handleBackdropClick(event, 'modalDeleteUser')">
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title" style="color: #f87171;">Confirm Deletion</h3>
-        <button class="modal-close" onclick="closeModal('delete-modal')">&times;</button>
+        <button class="modal-close" data-close-modal="modalDeleteUser" onclick="closeModal('modalDeleteUser')">&times;</button>
       </div>
       <div class="modal-body">
         <p>Are you sure you want to delete user <strong id="delete-user-name" style="color: #fff;"></strong>?</p>
@@ -264,7 +264,7 @@
         </p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-sm btn-view" onclick="closeModal('delete-modal')">Cancel</button>
+        <button type="button" class="btn-sm btn-view" data-close-modal="modalDeleteUser" onclick="closeModal('modalDeleteUser')">Cancel</button>
         <button type="button" id="confirm-delete-btn" class="btn-sm btn-delete" onclick="executeDelete()">
           🗑️ Delete Record
         </button>
@@ -331,28 +331,61 @@
       }, 3500);
     }
 
-    // Modal helpers
+    // Modal helpers with bidirectional ID resolution
+    function resolveModal(id) {
+      if (!id) return null;
+      let modal = document.getElementById(id);
+      if (modal) return modal;
+      const aliasMap = {
+        'create-modal': 'modalCreateUser',
+        'modalCreateUser': 'create-modal',
+        'edit-modal': 'modalEditUser',
+        'modalEditUser': 'edit-modal',
+        'delete-modal': 'modalDeleteUser',
+        'modalDeleteUser': 'delete-modal',
+        'view-modal': 'modalViewUser',
+        'modalViewUser': 'view-modal',
+      };
+      if (aliasMap[id]) {
+        modal = document.getElementById(aliasMap[id]);
+        if (modal) return modal;
+      }
+      return document.querySelector(`[data-modal="${id}"]`);
+    }
+
     function openModal(id) {
-      const modal = document.getElementById(id);
-      if (modal) modal.classList.add('open');
+      const modal = resolveModal(id);
+      if (modal) {
+        modal.classList.add('open');
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
     }
 
     function closeModal(id) {
-      const modal = document.getElementById(id);
-      if (modal) modal.classList.remove('open');
+      const modal = resolveModal(id);
+      if (modal) {
+        modal.classList.remove('open');
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+      }
     }
 
     function handleBackdropClick(event, modalId) {
-      if (event.target.id === modalId) {
+      if (event.target.id === modalId || event.target.dataset.modal === modalId) {
         closeModal(modalId);
       }
     }
 
     function openCreateModal() {
-      document.getElementById('create-user-form').reset();
+      const form = document.getElementById('create-user-form');
+      if (form) form.reset();
       hideErrors('create');
-      openModal('create-modal');
-      setTimeout(() => document.getElementById('create-name').focus(), 100);
+      openModal('modalCreateUser');
+      setTimeout(() => {
+        const input = document.getElementById('create-name');
+        if (input) input.focus();
+      }, 100);
     }
 
     function hideErrors(prefix) {
@@ -407,9 +440,9 @@
           <td>${formatDate(user.createdAt)}</td>
           <td style="text-align: right;">
             <div class="action-group" style="justify-content: flex-end;">
-              <button class="btn-sm btn-view" title="Inspect User" onclick="viewUser('${user.id}')">View</button>
-              <button class="btn-sm btn-edit" title="Edit User" onclick="openEditModal('${user.id}')">Edit</button>
-              <button class="btn-sm btn-delete" title="Delete User" onclick="promptDelete('${user.id}', '${escapeHtml(user.name)}')">Delete</button>
+              <button class="btn-sm btn-view" title="Inspect User" data-action="view" data-id="${user.id}" onclick="viewUser('${user.id}')">View</button>
+              <button class="btn-sm btn-edit" title="Edit User" data-action="edit" data-id="${user.id}" onclick="openEditModal('${user.id}')">Edit</button>
+              <button class="btn-sm btn-delete" title="Delete User" data-action="delete" data-id="${user.id}" data-name="${escapeHtml(user.name)}" onclick="promptDelete('${user.id}', '${escapeHtml(user.name)}')">Delete</button>
             </div>
           </td>
         `;
@@ -492,7 +525,7 @@
       document.getElementById('view-created').textContent = new Date(user.createdAt).toLocaleString();
       document.getElementById('view-updated').textContent = user.updatedAt ? new Date(user.updatedAt).toLocaleString() : '—';
 
-      openModal('view-modal');
+      openModal('modalViewUser');
     }
 
     // Open Edit Modal
@@ -506,17 +539,28 @@
       document.getElementById('edit-role').value = user.role;
       hideErrors('edit');
 
-      openModal('edit-modal');
+      openModal('modalEditUser');
     }
 
     // Create User Form Submit (AJAX)
     function handleCreateSubmit(event) {
-      event.preventDefault();
+      if (event) event.preventDefault();
       const name = document.getElementById('create-name').value.trim();
       const email = document.getElementById('create-email').value.trim();
       const role = document.getElementById('create-role').value;
       const submitBtn = document.getElementById('create-submit-btn');
       const errBox = document.getElementById('create-general-error');
+
+      if (!name || name.length < 2) {
+        errBox.textContent = 'Full name must be at least 2 characters.';
+        errBox.style.display = 'block';
+        return;
+      }
+      if (!email || !email.includes('@')) {
+        errBox.textContent = 'Please provide a valid email address.';
+        errBox.style.display = 'block';
+        return;
+      }
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving...';
@@ -538,7 +582,9 @@
         usersList.push(newUser);
         updateStats();
         applyFilters();
-        closeModal('create-modal');
+        closeModal('modalCreateUser');
+        const form = document.getElementById('create-user-form');
+        if (form) form.reset();
         showToast(`User "${newUser.name}" successfully created!`);
       })
       .catch(err => {
@@ -553,7 +599,7 @@
 
     // Edit User Form Submit (AJAX)
     function handleEditSubmit(event) {
-      event.preventDefault();
+      if (event) event.preventDefault();
       const id = document.getElementById('edit-id').value;
       const name = document.getElementById('edit-name').value.trim();
       const email = document.getElementById('edit-email').value.trim();
@@ -584,7 +630,7 @@
         }
         updateStats();
         applyFilters();
-        closeModal('edit-modal');
+        closeModal('modalEditUser');
         showToast(`User "${updatedUser.name}" successfully updated!`);
       })
       .catch(err => {
@@ -601,7 +647,7 @@
     function promptDelete(id, name) {
       pendingDeleteId = id;
       document.getElementById('delete-user-name').textContent = name;
-      openModal('delete-modal');
+      openModal('modalDeleteUser');
     }
 
     // Execute Delete
@@ -624,7 +670,7 @@
           usersList = usersList.filter(u => u.id !== id);
           updateStats();
           applyFilters();
-          closeModal('delete-modal');
+          closeModal('modalDeleteUser');
           showToast('User record removed successfully.');
         })
         .catch(err => {
@@ -637,8 +683,94 @@
         });
     }
 
+    // Attach Clean DOM Event Listeners
+    function attachEventListeners() {
+      // Primary "Add New User" button
+      const btnAdd = document.getElementById('btnAddUser') || document.getElementById('open-create-btn');
+      if (btnAdd) {
+        btnAdd.addEventListener('click', (e) => {
+          e.preventDefault();
+          openCreateModal();
+        });
+      }
+
+      // Create form submit
+      const createForm = document.getElementById('create-user-form');
+      if (createForm) {
+        createForm.addEventListener('submit', handleCreateSubmit);
+      }
+
+      // Edit form submit
+      const editForm = document.getElementById('edit-user-form');
+      if (editForm) {
+        editForm.addEventListener('submit', handleEditSubmit);
+      }
+
+      // Confirm delete button
+      const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+      if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          executeDelete();
+        });
+      }
+
+      // Live search and filter controls
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.addEventListener('input', handleSearch);
+      }
+
+      const roleFilter = document.getElementById('role-filter');
+      if (roleFilter) {
+        roleFilter.addEventListener('change', handleFilter);
+      }
+
+      // Table Action Delegated Click Listener (View, Edit, Delete)
+      const tbody = document.getElementById('users-tbody');
+      if (tbody) {
+        tbody.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          e.preventDefault();
+          const action = btn.dataset.action;
+          const id = btn.dataset.id;
+          if (action === 'view') {
+            viewUser(id);
+          } else if (action === 'edit') {
+            openEditModal(id);
+          } else if (action === 'delete') {
+            promptDelete(id, btn.dataset.name || '');
+          }
+        });
+      }
+
+      // Modal close buttons & Cancel buttons
+      document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) {
+            closeModal(overlay.id);
+          }
+        });
+      });
+
+      document.querySelectorAll('.modal-close, [data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const modalId = btn.getAttribute('data-close-modal');
+          if (modalId) {
+            closeModal(modalId);
+          } else {
+            const overlay = btn.closest('.modal-overlay');
+            if (overlay) closeModal(overlay.id);
+          }
+        });
+      });
+    }
+
     // Check URL parameters for server-side redirects (e.g. from standard form POST)
     window.addEventListener('DOMContentLoaded', () => {
+      attachEventListeners();
       loadUsers();
 
       const urlParams = new URLSearchParams(window.location.search);

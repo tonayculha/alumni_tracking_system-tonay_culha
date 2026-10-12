@@ -648,7 +648,8 @@ footer {
   padding: 1.5rem;
 }
 
-.modal-overlay.open {
+.modal-overlay.open,
+.modal-overlay.active {
   opacity: 1;
   pointer-events: auto;
 }
@@ -665,7 +666,8 @@ footer {
   transition: transform 0.2s ease;
 }
 
-.modal-overlay.open .modal-dialog {
+.modal-overlay.open .modal-dialog,
+.modal-overlay.active .modal-dialog {
   transform: translateY(0);
 }
 
