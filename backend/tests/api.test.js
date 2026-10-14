@@ -5,7 +5,11 @@ const http = require('http');
 // Set test environment
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3001';
+process.env.DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 
+const { closePool } = require('../src/config/db');
+const { runMigrations } = require('../src/db/migrate');
+const { runSeeds } = require('../src/db/seed');
 const app = require('../src/app');
 const { resetUsers } = require('../src/services/user.service');
 const { userModel, UserModel } = require('../src/models/user.model');
@@ -16,12 +20,19 @@ describe('Alumni Tracking System API Test Suite', () => {
   let server;
   const baseUrl = 'http://127.0.0.1:3001';
 
-  before((done) => {
-    server = app.listen(3001, '127.0.0.1', done);
+  before(async () => {
+    await runMigrations();
+    await runSeeds();
+    await new Promise((resolve) => {
+      server = app.listen(3001, '127.0.0.1', resolve);
+    });
   });
 
-  after((done) => {
-    server.close(done);
+  after(async () => {
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await closePool();
   });
 
   const apiRequest = (method, path, data = null, headers = {}) => {
@@ -271,8 +282,8 @@ describe('Alumni Tracking System API Test Suite', () => {
   });
 
   describe('Week 3: In-Memory User CRUD Operations (/api/users)', () => {
-    beforeEach(() => {
-      resetUsers();
+    beforeEach(async () => {
+      await resetUsers();
     });
 
     test('GET /api/users returns initial seed users (at least 3-4 users)', async () => {
@@ -461,8 +472,8 @@ describe('Alumni Tracking System API Test Suite', () => {
   // Week 4 Requirements: MVC User Views & Dual Controller
   // ==========================================
   describe('Week 4: MVC User View Layer (/users)', () => {
-    beforeEach(() => {
-      resetUsers();
+    beforeEach(async () => {
+      await resetUsers();
     });
 
     test('GET /users returns 200 with semantic HTML page and pre-hydrated users', async () => {
@@ -534,38 +545,38 @@ describe('Alumni Tracking System API Test Suite', () => {
   // Week 4 Requirements: In-Memory UserModel Specification
   // ==========================================
   describe('Week 4: In-Memory UserModel Specification', () => {
-    beforeEach(() => {
-      userModel.reset();
+    beforeEach(async () => {
+      await userModel.reset();
     });
 
-    test('UserModel.findAll returns all seed users defensively cloned', () => {
-      const users = userModel.findAll();
+    test('UserModel.findAll returns all seed users defensively cloned', async () => {
+      const users = await userModel.findAll();
       assert.ok(Array.isArray(users));
       assert.ok(users.length >= 3);
-      assert.strictEqual(users.length, userModel.count());
+      assert.strictEqual(users.length, await userModel.count());
     });
 
-    test('UserModel.findById returns target user or null', () => {
-      const user = userModel.findById('11111111-1111-4111-a111-111111111111');
+    test('UserModel.findById returns target user or null', async () => {
+      const user = await userModel.findById('11111111-1111-4111-a111-111111111111');
       assert.ok(user);
       assert.strictEqual(user.name, 'Ada Lovelace');
 
-      const nonExistent = userModel.findById('non-existent-id');
+      const nonExistent = await userModel.findById('non-existent-id');
       assert.strictEqual(nonExistent, null);
     });
 
-    test('UserModel.findByEmail performs case-insensitive lookup', () => {
-      const user = userModel.findByEmail('ADA.LOVELACE@ALUMNI.EDU');
+    test('UserModel.findByEmail performs case-insensitive lookup', async () => {
+      const user = await userModel.findByEmail('ADA.LOVELACE@ALUMNI.EDU');
       assert.ok(user);
       assert.strictEqual(user.id, '11111111-1111-4111-a111-111111111111');
 
-      const notFound = userModel.findByEmail('missing@alumni.edu');
+      const notFound = await userModel.findByEmail('missing@alumni.edu');
       assert.strictEqual(notFound, null);
     });
 
-    test('UserModel.create generates record and increments count', () => {
-      const initialCount = userModel.count();
-      const created = userModel.create({
+    test('UserModel.create generates record and increments count', async () => {
+      const initialCount = await userModel.count();
+      const created = await userModel.create({
         name: 'John von Neumann',
         email: 'neumann@alumni.edu',
         role: 'faculty',
@@ -573,14 +584,14 @@ describe('Alumni Tracking System API Test Suite', () => {
 
       assert.ok(created.id);
       assert.strictEqual(created.name, 'John von Neumann');
-      assert.strictEqual(userModel.count(), initialCount + 1);
+      assert.strictEqual(await userModel.count(), initialCount + 1);
 
-      const fetched = userModel.findById(created.id);
+      const fetched = await userModel.findById(created.id);
       assert.strictEqual(fetched.name, 'John von Neumann');
     });
 
-    test('UserModel.update modifies properties and updates timestamp', () => {
-      const updated = userModel.update('22222222-2222-4222-a222-222222222222', {
+    test('UserModel.update modifies properties and updates timestamp', async () => {
+      const updated = await userModel.update('22222222-2222-4222-a222-222222222222', {
         name: 'Alan M. Turing',
         role: 'fellow',
       });
@@ -589,34 +600,34 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(updated.name, 'Alan M. Turing');
       assert.strictEqual(updated.role, 'fellow');
 
-      const fetched = userModel.findById('22222222-2222-4222-a222-222222222222');
+      const fetched = await userModel.findById('22222222-2222-4222-a222-222222222222');
       assert.strictEqual(fetched.name, 'Alan M. Turing');
     });
 
-    test('UserModel.delete removes record and decrements count', () => {
-      const initialCount = userModel.count();
-      const success = userModel.delete('11111111-1111-4111-a111-111111111111');
+    test('UserModel.delete removes record and decrements count', async () => {
+      const initialCount = await userModel.count();
+      const success = await userModel.delete('11111111-1111-4111-a111-111111111111');
       assert.strictEqual(success, true);
-      assert.strictEqual(userModel.count(), initialCount - 1);
-      assert.strictEqual(userModel.findById('11111111-1111-4111-a111-111111111111'), null);
+      assert.strictEqual(await userModel.count(), initialCount - 1);
+      assert.strictEqual(await userModel.findById('11111111-1111-4111-a111-111111111111'), null);
 
-      const failed = userModel.delete('non-existent');
+      const failed = await userModel.delete('non-existent');
       assert.strictEqual(failed, false);
     });
 
-    test('UserModel enforces strict immutability against external mutations', () => {
-      const users = userModel.findAll();
+    test('UserModel enforces strict immutability against external mutations', async () => {
+      const users = await userModel.findAll();
       users[0].name = 'Tampered Directly In Memory';
 
-      const verify = userModel.findById(users[0].id);
+      const verify = await userModel.findById(users[0].id);
       assert.notStrictEqual(verify.name, 'Tampered Directly In Memory');
     });
 
-    test('UserModel static methods delegate properly to singleton instance', () => {
+    test('UserModel static methods delegate properly to singleton instance', async () => {
       assert.strictEqual(typeof UserModel.findAll, 'function');
-      const staticUsers = UserModel.findAll();
+      const staticUsers = await UserModel.findAll();
       assert.ok(Array.isArray(staticUsers));
-      assert.strictEqual(UserModel.count(), userModel.count());
+      assert.strictEqual(await UserModel.count(), await userModel.count());
     });
   });
 
@@ -624,15 +635,15 @@ describe('Alumni Tracking System API Test Suite', () => {
   // Week 4 Homework: In-Memory Announcement Model Specification
   // ==========================================
   describe('Week 4 Homework: In-Memory Announcement Model Specification', () => {
-    beforeEach(() => {
-      resetAnnouncements();
+    beforeEach(async () => {
+      await resetAnnouncements();
     });
 
-    test('AnnouncementModel.findAll returns all seed announcements (at least 3)', () => {
-      const items = announcementModel.findAll();
+    test('AnnouncementModel.findAll returns all seed announcements (at least 3)', async () => {
+      const items = await announcementModel.findAll();
       assert.ok(Array.isArray(items));
       assert.ok(items.length >= 3, `Expected at least 3 seed items, got ${items.length}`);
-      assert.strictEqual(items.length, announcementModel.count());
+      assert.strictEqual(items.length, await announcementModel.count());
 
       for (const item of items) {
         assert.ok(item.id, 'Announcement must have an id');
@@ -645,19 +656,19 @@ describe('Alumni Tracking System API Test Suite', () => {
       }
     });
 
-    test('AnnouncementModel.findById returns target announcement by UUID or null', () => {
+    test('AnnouncementModel.findById returns target announcement by UUID or null', async () => {
       const seedId = 'a1111111-1111-4111-a111-111111111111';
-      const item = announcementModel.findById(seedId);
+      const item = await announcementModel.findById(seedId);
       assert.ok(item);
       assert.strictEqual(item.title, 'Annual Alumni Homecoming 2026');
 
-      const nonExistent = announcementModel.findById('99999999-9999-9999-9999-999999999999');
+      const nonExistent = await announcementModel.findById('99999999-9999-9999-9999-999999999999');
       assert.strictEqual(nonExistent, null);
     });
 
-    test('AnnouncementModel.create stores announcement with schema compliance and increments count', () => {
-      const initialCount = announcementModel.count();
-      const created = announcementModel.create({
+    test('AnnouncementModel.create stores announcement with schema compliance and increments count', async () => {
+      const initialCount = await announcementModel.count();
+      const created = await announcementModel.create({
         title: 'Spring Research Symposium 2027',
         content: 'Call for undergraduate and graduate research papers across computing sciences.',
         category: 'academic',
@@ -669,15 +680,15 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(created.title, 'Spring Research Symposium 2027');
       assert.strictEqual(created.category, 'academic');
       assert.strictEqual(created.priority, 'urgent');
-      assert.strictEqual(announcementModel.count(), initialCount + 1);
+      assert.strictEqual(await announcementModel.count(), initialCount + 1);
 
-      const fetched = announcementModel.findById(created.id);
+      const fetched = await announcementModel.findById(created.id);
       assert.strictEqual(fetched.title, 'Spring Research Symposium 2027');
     });
 
-    test('AnnouncementModel.update modifies properties and updates timestamp', () => {
+    test('AnnouncementModel.update modifies properties and updates timestamp', async () => {
       const seedId = 'b2222222-2222-4222-a222-222222222222';
-      const updated = announcementModel.update(seedId, {
+      const updated = await announcementModel.update(seedId, {
         title: 'Fall Career Fair 2026 (Updated Schedule)',
         priority: 'urgent',
       });
@@ -687,35 +698,35 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(updated.priority, 'urgent');
       assert.ok(updated.updatedAt);
 
-      const fetched = announcementModel.findById(seedId);
+      const fetched = await announcementModel.findById(seedId);
       assert.strictEqual(fetched.title, 'Fall Career Fair 2026 (Updated Schedule)');
     });
 
-    test('AnnouncementModel.delete removes target record and decrements count', () => {
+    test('AnnouncementModel.delete removes target record and decrements count', async () => {
       const seedId = 'c3333333-3333-4333-a333-333333333333';
-      const initialCount = announcementModel.count();
-      const success = announcementModel.delete(seedId);
+      const initialCount = await announcementModel.count();
+      const success = await announcementModel.delete(seedId);
       assert.strictEqual(success, true);
-      assert.strictEqual(announcementModel.count(), initialCount - 1);
-      assert.strictEqual(announcementModel.findById(seedId), null);
+      assert.strictEqual(await announcementModel.count(), initialCount - 1);
+      assert.strictEqual(await announcementModel.findById(seedId), null);
 
-      const fail = announcementModel.delete('non-existent');
+      const fail = await announcementModel.delete('non-existent');
       assert.strictEqual(fail, false);
     });
 
-    test('AnnouncementModel enforces defensive cloning against external mutations', () => {
-      const items = announcementModel.findAll();
+    test('AnnouncementModel enforces defensive cloning against external mutations', async () => {
+      const items = await announcementModel.findAll();
       items[0].title = 'Tampered Directly In Memory';
 
-      const verify = announcementModel.findById(items[0].id);
+      const verify = await announcementModel.findById(items[0].id);
       assert.notStrictEqual(verify.title, 'Tampered Directly In Memory');
     });
 
-    test('AnnouncementModel static methods delegate properly to singleton instance', () => {
+    test('AnnouncementModel static methods delegate properly to singleton instance', async () => {
       assert.strictEqual(typeof AnnouncementModel.findAll, 'function');
-      const staticItems = AnnouncementModel.findAll();
+      const staticItems = await AnnouncementModel.findAll();
       assert.ok(Array.isArray(staticItems));
-      assert.strictEqual(AnnouncementModel.count(), announcementModel.count());
+      assert.strictEqual(await AnnouncementModel.count(), await announcementModel.count());
     });
   });
 
@@ -723,8 +734,8 @@ describe('Alumni Tracking System API Test Suite', () => {
   // Week 4 Homework: In-Memory Announcement CRUD Operations (/api/announcements)
   // ==========================================
   describe('Week 4 Homework: In-Memory Announcement CRUD Operations (/api/announcements)', () => {
-    beforeEach(() => {
-      resetAnnouncements();
+    beforeEach(async () => {
+      await resetAnnouncements();
     });
 
     test('GET /api/announcements returns initial seed announcements', async () => {
@@ -891,8 +902,8 @@ describe('Alumni Tracking System API Test Suite', () => {
   // Week 4 Homework: Announcement View Layer (/announcements)
   // ==========================================
   describe('Week 4 Homework: Announcement View Layer (/announcements)', () => {
-    beforeEach(() => {
-      resetAnnouncements();
+    beforeEach(async () => {
+      await resetAnnouncements();
     });
 
     test('GET /announcements returns 200 with semantic HTML page and pre-hydrated bulletins', async () => {

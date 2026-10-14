@@ -13,9 +13,9 @@ const announcementService = require('../services/announcement.service');
  * GET /api/announcements
  * Retrieve all announcements as JSON array
  */
-const getAnnouncements = (req, res, next) => {
+const getAnnouncements = async (req, res, next) => {
   try {
-    const items = announcementService.getAllAnnouncements();
+    const items = await announcementService.getAllAnnouncements();
     return res.status(200).json(items);
   } catch (error) {
     next(error);
@@ -26,9 +26,9 @@ const getAnnouncements = (req, res, next) => {
  * GET /api/announcements/:id
  * Retrieve announcement by UUID or 404
  */
-const getAnnouncementById = (req, res, next) => {
+const getAnnouncementById = async (req, res, next) => {
   try {
-    const item = announcementService.getAnnouncementById(req.params.id);
+    const item = await announcementService.getAnnouncementById(req.params.id);
     return res.status(200).json(item);
   } catch (error) {
     next(error);
@@ -39,10 +39,10 @@ const getAnnouncementById = (req, res, next) => {
  * POST /api/announcements
  * Validates payload and creates a new announcement, returns 201 Created
  */
-const createAnnouncement = (req, res, next) => {
+const createAnnouncement = async (req, res, next) => {
   try {
     const { title, content, category, author, priority } = req.body || {};
-    const newItem = announcementService.createAnnouncement({ title, content, category, author, priority });
+    const newItem = await announcementService.createAnnouncement({ title, content, category, author, priority });
     return res.status(201).json(newItem);
   } catch (error) {
     next(error);
@@ -53,10 +53,10 @@ const createAnnouncement = (req, res, next) => {
  * PUT /api/announcements/:id
  * Full idempotent update of existing announcement, returns 200 OK
  */
-const updateAnnouncement = (req, res, next) => {
+const updateAnnouncement = async (req, res, next) => {
   try {
     const { title, content, category, author, priority } = req.body || {};
-    const updatedItem = announcementService.updateAnnouncement(req.params.id, { title, content, category, author, priority });
+    const updatedItem = await announcementService.updateAnnouncement(req.params.id, { title, content, category, author, priority });
     return res.status(200).json(updatedItem);
   } catch (error) {
     next(error);
@@ -67,9 +67,9 @@ const updateAnnouncement = (req, res, next) => {
  * PATCH /api/announcements/:id
  * Partial update of existing announcement, returns 200 OK
  */
-const patchAnnouncement = (req, res, next) => {
+const patchAnnouncement = async (req, res, next) => {
   try {
-    const updatedItem = announcementService.patchAnnouncement(req.params.id, req.body || {});
+    const updatedItem = await announcementService.patchAnnouncement(req.params.id, req.body || {});
     return res.status(200).json(updatedItem);
   } catch (error) {
     next(error);
@@ -80,9 +80,9 @@ const patchAnnouncement = (req, res, next) => {
  * DELETE /api/announcements/:id
  * Removes announcement by ID, returns 200 OK with confirmation
  */
-const deleteAnnouncement = (req, res, next) => {
+const deleteAnnouncement = async (req, res, next) => {
   try {
-    announcementService.deleteAnnouncement(req.params.id);
+    await announcementService.deleteAnnouncement(req.params.id);
     return res.status(200).json({
       status: 'success',
       message: 'Announcement deleted successfully',

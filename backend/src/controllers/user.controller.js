@@ -19,9 +19,9 @@ const viewsPath = path.resolve(__dirname, '../views');
  * GET /users
  * Serves the semantic HTML user management portal (users.html) with embedded initial users state
  */
-const getUsersView = (req, res, next) => {
+const getUsersView = async (req, res, next) => {
   try {
-    const users = userService.getAllUsers();
+    const users = await userService.getAllUsers();
     const filePath = path.join(viewsPath, 'users.html');
 
     if (!fs.existsSync(filePath)) {
@@ -50,9 +50,9 @@ const getUsersView = (req, res, next) => {
  * GET /users/:id
  * User detail view or redirection with view query parameter
  */
-const getUserDetailView = (req, res, next) => {
+const getUserDetailView = async (req, res, next) => {
   try {
-    const user = userService.getUserById(req.params.id);
+    const user = await userService.getUserById(req.params.id);
 
     // If browser client requests HTML, redirect to main view highlighting this user
     if (req.accepts('html') && !req.xhr && !req.headers['content-type']?.includes('application/json')) {
@@ -69,10 +69,10 @@ const getUserDetailView = (req, res, next) => {
  * POST /users
  * Handles user creation via standard HTML forms (x-www-form-urlencoded) or direct view AJAX
  */
-const handleCreateUser = (req, res, next) => {
+const handleCreateUser = async (req, res, next) => {
   try {
     const { name, email, role } = req.body || {};
-    const newUser = userService.createUser({ name, email, role });
+    const newUser = await userService.createUser({ name, email, role });
 
     // Standard HTML form submission redirect
     const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
@@ -94,9 +94,9 @@ const handleCreateUser = (req, res, next) => {
  * POST /users/:id/delete or DELETE /users/:id
  * Handles user deletion from standard HTML form actions or view AJAX
  */
-const handleDeleteUser = (req, res, next) => {
+const handleDeleteUser = async (req, res, next) => {
   try {
-    userService.deleteUser(req.params.id);
+    await userService.deleteUser(req.params.id);
 
     const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
     if (isFormSubmit || (req.accepts('html') && !req.xhr)) {

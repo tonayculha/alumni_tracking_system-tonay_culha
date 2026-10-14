@@ -18,9 +18,9 @@ const viewsPath = path.resolve(__dirname, '../views');
  * GET /announcements
  * Serves announcements.html with embedded initial announcements state
  */
-const getAnnouncementsView = (req, res, next) => {
+const getAnnouncementsView = async (req, res, next) => {
   try {
-    const items = announcementService.getAllAnnouncements();
+    const items = await announcementService.getAllAnnouncements();
     const filePath = path.join(viewsPath, 'announcements.html');
 
     if (!fs.existsSync(filePath)) {
@@ -48,9 +48,9 @@ const getAnnouncementsView = (req, res, next) => {
  * GET /announcements/:id
  * Announcement detail view or redirection with view query
  */
-const getAnnouncementDetailView = (req, res, next) => {
+const getAnnouncementDetailView = async (req, res, next) => {
   try {
-    const item = announcementService.getAnnouncementById(req.params.id);
+    const item = await announcementService.getAnnouncementById(req.params.id);
 
     if (req.accepts('html') && !req.xhr && !req.headers['content-type']?.includes('application/json')) {
       return res.redirect(`/announcements?view=${encodeURIComponent(item.id)}`);
@@ -66,10 +66,10 @@ const getAnnouncementDetailView = (req, res, next) => {
  * POST /announcements
  * Handles creation via standard HTML forms or AJAX
  */
-const handleCreateAnnouncement = (req, res, next) => {
+const handleCreateAnnouncement = async (req, res, next) => {
   try {
     const { title, content, category, author, priority } = req.body || {};
-    const newItem = announcementService.createAnnouncement({ title, content, category, author, priority });
+    const newItem = await announcementService.createAnnouncement({ title, content, category, author, priority });
 
     const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
     if (isFormSubmit || (req.accepts('html') && !req.xhr)) {
@@ -90,9 +90,9 @@ const handleCreateAnnouncement = (req, res, next) => {
  * POST /announcements/:id/delete or DELETE /announcements/:id
  * Handles deletion from HTML form actions or view AJAX
  */
-const handleDeleteAnnouncement = (req, res, next) => {
+const handleDeleteAnnouncement = async (req, res, next) => {
   try {
-    announcementService.deleteAnnouncement(req.params.id);
+    await announcementService.deleteAnnouncement(req.params.id);
 
     const isFormSubmit = req.headers['content-type']?.includes('application/x-www-form-urlencoded');
     if (isFormSubmit || (req.accepts('html') && !req.xhr)) {

@@ -27,6 +27,7 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
   - [6. Parametric Greeting (`GET /hello/:name`)](#6-parametric-greeting)
   - [7. Calculation Endpoint (`GET /sum/:num1/:num2`)](#7-calculation-summation)
   - [8. Semantic HTML Views](#8-semantic-html-views)
+- [Database Design & Persistence Documentation (ddd.md)](#-database-design--persistence-documentation-dddmd)
 - [Local Development & Testing](#-local-development--testing)
 - [Environment Configuration](#-environment-configuration)
 - [Containerization Details](#-containerization-details)
@@ -43,6 +44,7 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
 3. **Instructor Milestone Isolation (Week 3 & 4)**: As required by the instructor (*"without database connection / in-memory only"*), all User Management CRUD operations utilize a dedicated thread-safe in-memory data store with deep cloning immutability and pre-seeded sample data, strictly decoupled from persistent tables.
 4. **MVC Architecture & Dual Controller Routing (Week 4)**: Clear separation of concerns between user-facing browser views and machine-facing REST APIs. Implements an in-memory `UserModel` (`backend/src/models/user.model.js`), dual controllers (`ApiUserController` for pure JSON REST vs `UserController` for semantic HTML view rendering), and an interactive browser-based user management portal at `/users`.
 5. **Interactive OpenAPI 3.0 Documentation**: Fully interactive Swagger UI exposed at `/api/swagger` and `/api/docs` allowing instant endpoint discovery and browser testing.
+6. **Database Persistence & Migration Design (Week 5)**: Formally planned and documented in [ddd.md](./ddd.md). Establishes the relational schema, PostgreSQL 16 persistence with named volume `postgres_data`, container health probes, and migration strategy.
 
 ---
 
@@ -526,6 +528,23 @@ Render modern, responsive, styled user interfaces.
 
 ---
 
+## 🗄️ Database Design & Persistence Documentation (`ddd.md`)
+
+The comprehensive database architecture, schema definitions, constraints, index performance strategy, and migration roadmaps are documented in the standalone **Data Design Document (DDD)**:
+
+👉 **[Read the Full Data Design Document (ddd.md)](./ddd.md)** 👈
+
+### Key Architectural Highlights:
+* **Relational Storage**: PostgreSQL 16 Alpine containerized database service (`alumni_postgres`).
+* **Zero Data Loss Guarantee**: High-durability persistent storage via Docker named volume `postgres_data` mapped to `/var/lib/postgresql/data`.
+* **Entity Specifications**:
+  * **`users` Table**: UUID primary key (`gen_random_uuid()`), name, RFC-compliant unique email (`LOWER(email)` unique index), role (`admin`, `alumni`, `student`), and UTC audit timestamps (`created_at`, `updated_at`).
+  * **`announcements` Table**: UUID primary key, headline title, long-form content (`TEXT`), category (`academic`, `career`, `social`), author/department string, priority (`low`, `normal`, `urgent`), and UTC audit timestamps.
+* **Deterministic Bootstrapping**: Docker Compose coordinates backend startup using PostgreSQL health probes (`pg_isready`), ensuring zero connection dropouts during container orchestration.
+* **Bidirectional Documentation**: [ddd.md](./ddd.md) links directly back to this [README.md](./README.md).
+
+---
+
 ## 🧪 Local Development & Testing
 
 Run automated tests directly on your machine:
@@ -563,10 +582,10 @@ npm test
 | `PORT` | `3000` | Port on which the Express server listens |
 | `HOST` | `0.0.0.0` | Host binding interface |
 | `APP_NAME` | `Alumni Tracking System` | Application display name |
-| `DB_HOST` | `database` | PostgreSQL host (`database` in Docker network) |
+| `DB_HOST` | `alumni_postgres` | PostgreSQL host (service name in Docker network) |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_USER` | `alumni_user` | PostgreSQL database user |
-| `DB_PASSWORD` | `alumni_secure_pass` | PostgreSQL password |
+| `DB_PASSWORD` | `alumni_secure_password` | PostgreSQL password |
 | `DB_NAME` | `alumni_db` | PostgreSQL target database name |
 
 ---
@@ -574,5 +593,5 @@ npm test
 ## 🐳 Containerization Details
 
 - **Backend Dockerfile**: Multi-stage Alpine container (`node:20-alpine`), non-root `node` user, deterministic `npm ci --omit=dev`, internal healthcheck.
-- **PostgreSQL Database**: Isolated container running on Alpine 16, health check configured.
-- **Zero-Touch Startup**: `docker compose up --build` launches both services cleanly in dependency order.
+- **PostgreSQL Database (`alumni_postgres`)**: Isolated container running on Alpine 16 (`postgres:16-alpine`), persistent named volume `postgres_data` mounted at `/var/lib/postgresql/data`, health check configured via `pg_isready`.
+- **Zero-Touch Startup**: `docker compose up --build` launches both services cleanly in dependency order (`condition: service_healthy`).

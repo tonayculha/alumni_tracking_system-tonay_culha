@@ -65,19 +65,19 @@ function validateUserData(data, isPartial = false) {
 
 /**
  * Retrieve all users
- * @returns {Array<Object>}
+ * @returns {Promise<Array<Object>>}
  */
-const getAllUsers = () => {
-  return userModel.findAll();
+const getAllUsers = async () => {
+  return await userModel.findAll();
 };
 
 /**
  * Retrieve single user by ID
  * @param {string} id
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const getUserById = (id) => {
-  const user = userModel.findById(id);
+const getUserById = async (id) => {
+  const user = await userModel.findById(id);
   if (!user) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -87,28 +87,28 @@ const getUserById = (id) => {
 /**
  * Create a new user
  * @param {Object} payload
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const createUser = ({ name, email, role }) => {
+const createUser = async ({ name, email, role }) => {
   validateUserData({ name, email, role }, false);
 
   const normalizedEmail = email.trim().toLowerCase();
-  const existing = userModel.findByEmail(normalizedEmail);
+  const existing = await userModel.findByEmail(normalizedEmail);
   if (existing) {
     throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
   }
 
-  return userModel.create({ name, email: normalizedEmail, role });
+  return await userModel.create({ name, email: normalizedEmail, role });
 };
 
 /**
  * Full update of an existing user (PUT)
  * @param {string} id
  * @param {Object} payload
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const updateUser = (id, { name, email, role }) => {
-  const existing = userModel.findById(id);
+const updateUser = async (id, { name, email, role }) => {
+  const existing = await userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -117,23 +117,23 @@ const updateUser = (id, { name, email, role }) => {
 
   const normalizedEmail = email.trim().toLowerCase();
   if (normalizedEmail !== existing.email.toLowerCase()) {
-    const emailConflict = userModel.findByEmail(normalizedEmail);
+    const emailConflict = await userModel.findByEmail(normalizedEmail);
     if (emailConflict && emailConflict.id !== id) {
       throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
     }
   }
 
-  return userModel.update(id, { name, email: normalizedEmail, role });
+  return await userModel.update(id, { name, email: normalizedEmail, role });
 };
 
 /**
  * Partial update of an existing user (PATCH)
  * @param {string} id
- * @param {Object} payload
- * @returns {Object}
+ * @param {Object} fields
+ * @returns {Promise<Object>}
  */
-const patchUser = (id, fields) => {
-  const existing = userModel.findById(id);
+const patchUser = async (id, fields) => {
+  const existing = await userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
@@ -160,7 +160,7 @@ const patchUser = (id, fields) => {
   if (updateData.email) {
     const normalizedEmail = updateData.email.trim().toLowerCase();
     if (normalizedEmail !== existing.email.toLowerCase()) {
-      const emailConflict = userModel.findByEmail(normalizedEmail);
+      const emailConflict = await userModel.findByEmail(normalizedEmail);
       if (emailConflict && emailConflict.id !== id) {
         throw new ConflictError(`User with email "${normalizedEmail}" already exists.`);
       }
@@ -168,28 +168,29 @@ const patchUser = (id, fields) => {
     updateData.email = normalizedEmail;
   }
 
-  return userModel.update(id, updateData);
+  return await userModel.update(id, updateData);
 };
 
 /**
  * Delete a user by ID
  * @param {string} id
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-const deleteUser = (id) => {
-  const existing = userModel.findById(id);
+const deleteUser = async (id) => {
+  const existing = await userModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`User with id "${id}" not found.`);
   }
 
-  return userModel.delete(id);
+  return await userModel.delete(id);
 };
 
 /**
  * Reset store to seed data (useful for test isolation)
+ * @returns {Promise<void>}
  */
-const resetUsers = () => {
-  userModel.reset();
+const resetUsers = async () => {
+  await userModel.reset();
 };
 
 module.exports = {

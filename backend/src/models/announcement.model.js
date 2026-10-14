@@ -1,8 +1,10 @@
+const { query } = require('../config/db');
 const crypto = require('crypto');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 /**
- * Initial Seed Data for Announcements
- * Pre-populated with realistic campus & alumni announcements
+ * Initial Seed Announcements (Week 5: PostgreSQL Database Integration)
  */
 const INITIAL_ANNOUNCEMENTS = [
   {
@@ -40,135 +42,166 @@ const INITIAL_ANNOUNCEMENTS = [
 /**
  * AnnouncementModel
  * 
- * In-memory model for Announcement entity operations.
- * Enforces defensive deep cloning to maintain thread safety and state immutability.
- * 
- * Schema:
- * - id: UUID string
- * - title: string
- * - content: string
- * - category: 'academic' | 'career' | 'social'
- * - author: string
- * - priority: 'low' | 'normal' | 'urgent'
- * - createdAt: ISO date string
- * - updatedAt: ISO date string
+ * Model layer for Announcement entity backed by PostgreSQL 16 database.
+ * Executes parameterized SQL queries via pg connection pool.
  */
 class AnnouncementModel {
-  constructor() {
-    this.announcements = [];
-    this.reset();
+  /**
+   * Normalize database row to standard announcement domain object
+   * @param {Object} row
+   * @returns {Object|null}
+   */
+  _mapAnnouncement(row) {
+    if (!row) return null;
+    const createdAtIso = row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString();
+    const updatedAtIso = row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString();
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      category: row.category,
+      author: row.author,
+      priority: row.priority,
+      createdAt: row.createdAt || createdAtIso,
+      updatedAt: row.updatedAt || updatedAtIso,
+      created_at: row.created_at || createdAtIso,
+      updated_at: row.updated_at || updatedAtIso,
+    };
   }
 
   /**
-   * Defensive deep clone helper
-   * @param {any} data
-   * @returns {any}
+   * Retrieve all announcements from PostgreSQL ordered by created_at DESC
+   * @returns {Promise<Array<Object>>}
    */
-  _clone(data) {
-    if (data === undefined || data === null) return data;
-    return JSON.parse(JSON.stringify(data));
-  }
-
-  /**
-   * Reset store to initial seed announcements
-   */
-  reset() {
-    this.announcements = this._clone(INITIAL_ANNOUNCEMENTS);
-  }
-
-  /**
-   * Retrieve all announcements
-   * @returns {Array<Object>}
-   */
-  findAll() {
-    return this._clone(this.announcements);
+  async findAll() {
+    const res = await query(
+      'SELECT id, title, content, category, author, priority, created_at, updated_at FROM announcements ORDER BY created_at DESC'
+    );
+    return res.rows.map((row) => this._mapAnnouncement(row));
   }
 
   /**
    * Retrieve announcement by UUID
    * @param {string} id
-   * @returns {Object|null}
+   * @returns {Promise<Object|null>}
    */
-  findById(id) {
-    if (!id) return null;
-    const item = this.announcements.find((a) => a.id === id);
-    return item ? this._clone(item) : null;
+  async findById(id) {
+    if (!id || typeof id !== 'string' || !UUID_REGEX.test(id)) return null;
+    const res = await query(
+      'SELECT id, title, content, category, author, priority, created_at, updated_at FROM announcements WHERE id = $1',
+      [id]
+    );
+    if (!res.rows || res.rows.length === 0) return null;
+    return this._mapAnnouncement(res.rows[0]);
   }
 
   /**
-   * Create and store a new announcement
+   * Create and store a new announcement in PostgreSQL
    * @param {Object} data
-   * @param {string} data.title
-   * @param {string} data.content
-   * @param {string} data.category - 'academic' | 'career' | 'social'
-   * @param {string} data.author
-   * @param {string} data.priority - 'low' | 'normal' | 'urgent'
-   * @param {string} [data.id] - Optional UUID override
-   * @returns {Object} Newly created record
+   * @returns {Promise<Object>}
    */
-  create({ title, content, category, author, priority, id }) {
-    const now = new Date().toISOString();
-    const newRecord = {
-      id: id || crypto.randomUUID(),
-      title: title.trim(),
-      content: content.trim(),
-      category: category.trim().toLowerCase(),
-      author: author.trim(),
-      priority: (priority || 'normal').trim().toLowerCase(),
-      createdAt: now,
-      updatedAt: now,
-    };
+  async create({ title, content, category, author, priority, id }) {
+    const itemId = id || crypto.randomUUID();
+    const cleanTitle = title.trim();
+    const cleanContent = content.trim();
+    const cleanCategory = category.trim().toLowerCase();
+    const cleanAuthor = author.trim();
+    const cleanPriority = (priority || 'normal').trim().toLowerCase();
 
-    this.announcements.unshift(this._clone(newRecord));
-    return this._clone(newRecord);
+    const res = await query(
+      `INSERT INTO announcements (id, title, content, category, author, priority, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       RETURNING id, title, content, category, author, priority, created_at, updated_at`,
+      [itemId, cleanTitle, cleanContent, cleanCategory, cleanAuthor, cleanPriority]
+    );
+    return this._mapAnnouncement(res.rows[0]);
   }
 
   /**
-   * Update an existing announcement
+   * Update an existing announcement in PostgreSQL
    * @param {string} id
    * @param {Object} updateData
-   * @returns {Object|null}
+   * @returns {Promise<Object|null>}
    */
-  update(id, updateData) {
-    const index = this.announcements.findIndex((a) => a.id === id);
-    if (index === -1) return null;
+  async update(id, updateData) {
+    if (!id || typeof id !== 'string' || !UUID_REGEX.test(id)) return null;
 
-    const existing = this.announcements[index];
-    const updated = {
-      ...existing,
-      ...(updateData.title !== undefined ? { title: updateData.title.trim() } : {}),
-      ...(updateData.content !== undefined ? { content: updateData.content.trim() } : {}),
-      ...(updateData.category !== undefined ? { category: updateData.category.trim().toLowerCase() } : {}),
-      ...(updateData.author !== undefined ? { author: updateData.author.trim() } : {}),
-      ...(updateData.priority !== undefined ? { priority: updateData.priority.trim().toLowerCase() } : {}),
-      id: existing.id, // Immutable ID
-      createdAt: existing.createdAt, // Immutable createdAt
-      updatedAt: new Date().toISOString(),
-    };
+    const sets = [];
+    const values = [id];
+    let idx = 2;
 
-    this.announcements[index] = this._clone(updated);
-    return this._clone(updated);
+    if (updateData.title !== undefined) {
+      sets.push(`title = $${idx++}`);
+      values.push(updateData.title.trim());
+    }
+    if (updateData.content !== undefined) {
+      sets.push(`content = $${idx++}`);
+      values.push(updateData.content.trim());
+    }
+    if (updateData.category !== undefined) {
+      sets.push(`category = $${idx++}`);
+      values.push(updateData.category.trim().toLowerCase());
+    }
+    if (updateData.author !== undefined) {
+      sets.push(`author = $${idx++}`);
+      values.push(updateData.author.trim());
+    }
+    if (updateData.priority !== undefined) {
+      sets.push(`priority = $${idx++}`);
+      values.push(updateData.priority.trim().toLowerCase());
+    }
+
+    if (sets.length === 0) {
+      return this.findById(id);
+    }
+
+    sets.push(`updated_at = NOW()`);
+    const sql = `UPDATE announcements SET ${sets.join(', ')} WHERE id = $1 RETURNING id, title, content, category, author, priority, created_at, updated_at`;
+    const res = await query(sql, values);
+    if (!res.rows || res.rows.length === 0) return null;
+    return this._mapAnnouncement(res.rows[0]);
   }
 
   /**
-   * Delete announcement by ID
+   * Delete announcement by UUID from PostgreSQL
    * @param {string} id
-   * @returns {boolean}
+   * @returns {Promise<boolean>}
    */
-  delete(id) {
-    const index = this.announcements.findIndex((a) => a.id === id);
-    if (index === -1) return false;
-
-    this.announcements.splice(index, 1);
-    return true;
+  async delete(id) {
+    if (!id || typeof id !== 'string' || !UUID_REGEX.test(id)) return false;
+    const res = await query('DELETE FROM announcements WHERE id = $1', [id]);
+    return res.rowCount > 0;
   }
 
   /**
-   * Return count of stored announcements
-   * @returns {number}
+   * Return count of stored announcements in PostgreSQL
+   * @returns {Promise<number>}
    */
-  count() {
-    return this.announcements.length;
+  async count() {
+    const res = await query('SELECT COUNT(*) AS count FROM announcements');
+    return parseInt(res.rows[0].count, 10);
+  }
+
+  /**
+   * Reset announcements table to initial seed records
+   * @returns {Promise<void>}
+   */
+  async reset() {
+    await query('DELETE FROM announcements');
+    for (const a of INITIAL_ANNOUNCEMENTS) {
+      await query(
+        `INSERT INTO announcements (id, title, content, category, author, priority, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET
+           title = EXCLUDED.title,
+           content = EXCLUDED.content,
+           category = EXCLUDED.category,
+           author = EXCLUDED.author,
+           priority = EXCLUDED.priority,
+           updated_at = EXCLUDED.updated_at`,
+        [a.id, a.title, a.content, a.category, a.author, a.priority, a.createdAt, a.updatedAt]
+      );
+    }
   }
 
   // Static convenience wrappers

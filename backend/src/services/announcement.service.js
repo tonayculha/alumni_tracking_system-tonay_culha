@@ -58,7 +58,7 @@ function validateAnnouncementData(data, isPartial = false) {
     }
   }
 
-  if (data.priority !== undefined) {
+  if (!isPartial || data.priority !== undefined) {
     if (typeof data.priority !== 'string' || !ALLOWED_PRIORITIES.includes(data.priority.trim().toLowerCase())) {
       errors.push(`Field "priority" must be one of: ${ALLOWED_PRIORITIES.join(', ')}.`);
     }
@@ -71,19 +71,19 @@ function validateAnnouncementData(data, isPartial = false) {
 
 /**
  * Retrieve all announcements
- * @returns {Array<Object>}
+ * @returns {Promise<Array<Object>>}
  */
-const getAllAnnouncements = () => {
-  return announcementModel.findAll();
+const getAllAnnouncements = async () => {
+  return await announcementModel.findAll();
 };
 
 /**
  * Retrieve single announcement by UUID
  * @param {string} id
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const getAnnouncementById = (id) => {
-  const item = announcementModel.findById(id);
+const getAnnouncementById = async (id) => {
+  const item = await announcementModel.findById(id);
   if (!item) {
     throw new NotFoundError(`Announcement with id "${id}" not found.`);
   }
@@ -93,12 +93,12 @@ const getAnnouncementById = (id) => {
 /**
  * Create a new announcement
  * @param {Object} payload
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const createAnnouncement = ({ title, content, category, author, priority }) => {
+const createAnnouncement = async ({ title, content, category, author, priority }) => {
   validateAnnouncementData({ title, content, category, author, priority }, false);
 
-  return announcementModel.create({
+  return await announcementModel.create({
     title,
     content,
     category: category.trim().toLowerCase(),
@@ -111,17 +111,17 @@ const createAnnouncement = ({ title, content, category, author, priority }) => {
  * Full update of an existing announcement (PUT)
  * @param {string} id
  * @param {Object} payload
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const updateAnnouncement = (id, { title, content, category, author, priority }) => {
-  const existing = announcementModel.findById(id);
+const updateAnnouncement = async (id, { title, content, category, author, priority }) => {
+  const existing = await announcementModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`Announcement with id "${id}" not found.`);
   }
 
   validateAnnouncementData({ title, content, category, author, priority }, false);
 
-  return announcementModel.update(id, {
+  return await announcementModel.update(id, {
     title,
     content,
     category: category.trim().toLowerCase(),
@@ -134,10 +134,10 @@ const updateAnnouncement = (id, { title, content, category, author, priority }) 
  * Partial update of an existing announcement (PATCH)
  * @param {string} id
  * @param {Object} fields
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-const patchAnnouncement = (id, fields) => {
-  const existing = announcementModel.findById(id);
+const patchAnnouncement = async (id, fields) => {
+  const existing = await announcementModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`Announcement with id "${id}" not found.`);
   }
@@ -161,28 +161,29 @@ const patchAnnouncement = (id, fields) => {
 
   validateAnnouncementData(updateData, true);
 
-  return announcementModel.update(id, updateData);
+  return await announcementModel.update(id, updateData);
 };
 
 /**
  * Delete announcement by ID
  * @param {string} id
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-const deleteAnnouncement = (id) => {
-  const existing = announcementModel.findById(id);
+const deleteAnnouncement = async (id) => {
+  const existing = await announcementModel.findById(id);
   if (!existing) {
     throw new NotFoundError(`Announcement with id "${id}" not found.`);
   }
 
-  return announcementModel.delete(id);
+  return await announcementModel.delete(id);
 };
 
 /**
  * Reset announcements store (useful for tests)
+ * @returns {Promise<void>}
  */
-const resetAnnouncements = () => {
-  announcementModel.reset();
+const resetAnnouncements = async () => {
+  await announcementModel.reset();
 };
 
 module.exports = {
