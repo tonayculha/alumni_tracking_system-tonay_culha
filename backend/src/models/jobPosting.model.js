@@ -35,6 +35,8 @@ class JobPostingModel {
       company: row.company,
       location: row.location || null,
       description: row.description || null,
+      authorName: row.author_name || null,
+      authorEmail: row.author_email || null,
       createdAt: createdAtIso,
       updatedAt: updatedAtIso,
       created_at: createdAtIso,
@@ -55,20 +57,22 @@ class JobPostingModel {
     let idx = 1;
 
     if (filters.userId && this._isValidUuid(filters.userId)) {
-      conditions.push(`user_id = $${idx++}`);
+      conditions.push(`j.user_id = $${idx++}`);
       values.push(filters.userId.trim());
     }
 
     if (filters.company && typeof filters.company === 'string') {
-      conditions.push(`LOWER(company) LIKE LOWER($${idx++})`);
+      conditions.push(`LOWER(j.company) LIKE LOWER($${idx++})`);
       values.push(`%${filters.company.trim()}%`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const sql = `SELECT id, user_id, title, company, location, description, created_at, updated_at 
-                 FROM job_postings 
+    const sql = `SELECT j.id, j.user_id, j.title, j.company, j.location, j.description, j.created_at, j.updated_at,
+                        u.name AS author_name, u.email AS author_email
+                 FROM job_postings j
+                 LEFT JOIN users u ON j.user_id = u.id
                  ${whereClause} 
-                 ORDER BY created_at DESC`;
+                 ORDER BY j.created_at DESC`;
 
     const res = await query(sql, values);
     return res.rows.map((row) => this._mapJob(row));
@@ -82,9 +86,11 @@ class JobPostingModel {
   async findById(id) {
     if (!this._isValidUuid(id)) return null;
     const res = await query(
-      `SELECT id, user_id, title, company, location, description, created_at, updated_at 
-       FROM job_postings 
-       WHERE id = $1`,
+      `SELECT j.id, j.user_id, j.title, j.company, j.location, j.description, j.created_at, j.updated_at,
+              u.name AS author_name, u.email AS author_email
+       FROM job_postings j
+       LEFT JOIN users u ON j.user_id = u.id
+       WHERE j.id = $1`,
       [id.trim()]
     );
     if (!res.rows || res.rows.length === 0) return null;
@@ -99,10 +105,12 @@ class JobPostingModel {
   async findByUserId(userId) {
     if (!this._isValidUuid(userId)) return [];
     const res = await query(
-      `SELECT id, user_id, title, company, location, description, created_at, updated_at 
-       FROM job_postings 
-       WHERE user_id = $1 
-       ORDER BY created_at DESC`,
+      `SELECT j.id, j.user_id, j.title, j.company, j.location, j.description, j.created_at, j.updated_at,
+              u.name AS author_name, u.email AS author_email
+       FROM job_postings j
+       LEFT JOIN users u ON j.user_id = u.id
+       WHERE j.user_id = $1 
+       ORDER BY j.created_at DESC`,
       [userId.trim()]
     );
     return res.rows.map((row) => this._mapJob(row));

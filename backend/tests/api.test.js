@@ -1224,5 +1224,186 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(checkApp.statusCode, 404);
     });
   });
+
+  /* =========================================================================
+   * WEEK 6 HOMEWORK: Job Postings View Layer (/jobs)
+   * ========================================================================= */
+  describe('Week 6 Homework: Job Postings View Layer (/jobs)', () => {
+    const seedUserId = '11111111-1111-4111-a111-111111111111';
+
+    test('GET /jobs returns 200 with semantic HTML page and pre-hydrated jobs', async () => {
+      const res = await request('/jobs');
+      assert.strictEqual(res.statusCode, 200);
+      assert.match(res.headers['content-type'], /text\/html/);
+      assert.match(res.body, /Career Opportunities &amp; Job Postings|Career Opportunities/);
+      assert.match(res.body, /id="initial-jobs-data"/);
+      assert.match(res.body, /id="initial-users-data"/);
+    });
+
+    test('POST /jobs with urlencoded form submission creates job and redirects (302)', async () => {
+      const formPayload = new URLSearchParams({
+        userId: seedUserId,
+        title: 'Form Submission Engineer',
+        company: 'Form Dynamics Inc.',
+        location: 'Berlin, DE',
+        description: 'Created through semantic HTML form submission.',
+      }).toString();
+
+      const res = await apiRequest('POST', '/jobs', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/jobs\?status=created/);
+    });
+
+    test('POST /jobs with invalid form data redirects with error parameter (302)', async () => {
+      const formPayload = new URLSearchParams({
+        userId: seedUserId,
+        title: '', // Missing title
+        company: 'Form Dynamics Inc.',
+      }).toString();
+
+      const res = await apiRequest('POST', '/jobs', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/jobs\?error=/);
+    });
+
+    test('GET /jobs/:id with HTML accept header redirects to view query (302)', async () => {
+      const jobsListRes = await request('/api/jobs');
+      const jobs = jobsListRes.json();
+      assert.ok(jobs.length > 0);
+      const targetJobId = jobs[0].id;
+
+      const res = await request(`/jobs/${targetJobId}`, {
+        Accept: 'text/html',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, new RegExp(`/jobs\\?view=${targetJobId}`));
+    });
+
+    test('GET /jobs/:id with non-existent ID returns 404', async () => {
+      const res = await request('/jobs/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /jobs/:id/delete with form action deletes job and redirects (302)', async () => {
+      // Create a transient job to delete
+      const createRes = await apiRequest('POST', `/api/users/${seedUserId}/jobs`, {
+        title: 'Delete Me Job',
+        company: 'Ephemeral Co',
+      });
+      assert.strictEqual(createRes.statusCode, 201);
+      const toDeleteId = createRes.json().id;
+
+      const res = await apiRequest('POST', `/jobs/${toDeleteId}/delete`, '', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/jobs\?status=deleted/);
+
+      // Verify deletion
+      const checkRes = await request(`/api/jobs/${toDeleteId}`);
+      assert.strictEqual(checkRes.statusCode, 404);
+    });
+  });
+
+  /* =========================================================================
+   * WEEK 6 HOMEWORK: Applications View Layer (/applications)
+   * ========================================================================= */
+  describe('Week 6 Homework: Applications View Layer (/applications)', () => {
+    const candidateUserId = '33333333-3333-4333-a333-333333333333'; // Grace Hopper
+    let targetJobId;
+
+    before(async () => {
+      const jobsRes = await request('/api/jobs');
+      const jobs = jobsRes.json();
+      assert.ok(jobs.length > 0);
+      targetJobId = jobs[0].id;
+    });
+
+    test('GET /applications returns 200 with semantic HTML page and pre-hydrated applications', async () => {
+      const res = await request('/applications');
+      assert.strictEqual(res.statusCode, 200);
+      assert.match(res.headers['content-type'], /text\/html/);
+      assert.match(res.body, /Candidate Applications &amp; Tracking|Candidate Applications/);
+      assert.match(res.body, /id="initial-applications-data"/);
+    });
+
+    test('POST /applications with form submission creates application and redirects (302)', async () => {
+      // Use candidate Grace Hopper on a job
+      const formPayload = new URLSearchParams({
+        userId: candidateUserId,
+        jobId: targetJobId,
+        status: 'applied',
+      }).toString();
+
+      const res = await apiRequest('POST', '/applications', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/applications\?status=created/);
+    });
+
+    test('POST /applications with duplicate submission redirects with Conflict error (302)', async () => {
+      // Attempt duplicate application for same candidate & job
+      const formPayload = new URLSearchParams({
+        userId: candidateUserId,
+        jobId: targetJobId,
+      }).toString();
+
+      const res = await apiRequest('POST', '/applications', formPayload, {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/applications\?error=/);
+      assert.match(decodeURIComponent(res.headers.location), /already applied/i);
+    });
+
+    test('GET /applications/:id with HTML accept header redirects to view query (302)', async () => {
+      const appsListRes = await request('/api/applications');
+      const apps = appsListRes.json();
+      assert.ok(apps.length > 0);
+      const targetAppId = apps[0].id;
+
+      const res = await request(`/applications/${targetAppId}`, {
+        Accept: 'text/html',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, new RegExp(`/applications\\?view=${targetAppId}`));
+    });
+
+    test('GET /applications/:id with non-existent ID returns 404', async () => {
+      const res = await request('/applications/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /applications/:id/delete with form action deletes application and redirects (302)', async () => {
+      // Find an existing application to delete
+      const appsListRes = await request('/api/applications');
+      const apps = appsListRes.json();
+      const appToDelete = apps.find(a => a.userId === candidateUserId && a.jobPostingId === targetJobId);
+      assert.ok(appToDelete);
+
+      const res = await apiRequest('POST', `/applications/${appToDelete.id}/delete`, '', {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      });
+
+      assert.strictEqual(res.statusCode, 302);
+      assert.match(res.headers.location, /\/applications\?status=deleted/);
+
+      // Verify deletion
+      const checkRes = await request(`/api/applications/${appToDelete.id}`);
+      assert.strictEqual(checkRes.statusCode, 404);
+    });
+  });
 });
 

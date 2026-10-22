@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alumni Tracking System | Job Postings</title>
+  <meta name="description" content="Explore and apply to career opportunities and job postings published by alumni and partners.">
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- INITIAL_JOBS_DATA -->
+</head>
+<body>
+  <header>
+    <div class="nav-container">
+      <a href="/home" class="brand">
+        🎓 Alumni System
+        <span class="brand-badge">Core v1.0</span>
+      </a>
+      <nav>
+        <ul>
+          <li><a href="/home">Home</a></li>
+          <li><a href="/users">Users</a></li>
+          <li><a href="/announcements">Announcements</a></li>
+          <li><a href="/jobs" class="active">Jobs</a></li>
+          <li><a href="/applications">Applications</a></li>
+          <li><a href="/about">About</a></li>
+          <li><a href="/api/swagger" target="_blank">Swagger Docs</a></li>
+          <li><a href="/api/jobs" target="_blank">Jobs API</a></li>
+          <li><a href="/api/health" target="_blank">Health</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: 1.5rem;">
+      <div class="hero-tag">Relational Postings &bull; One-to-Many Associations</div>
+      <h1>Career Opportunities &amp; Job Postings</h1>
+      <p>
+        Discover engineering, research, and technical leadership opportunities posted by registered alumni and partner organizations.
+        Submit applications directly or publish your team's open vacancies.
+      </p>
+      <div class="btn-group">
+        <button id="btnPostJob" class="btn btn-primary">
+          💼 Post a Job
+        </button>
+        <a href="/applications" class="btn btn-secondary">
+          📄 View Applications
+        </a>
+        <a href="/api/jobs" class="btn btn-secondary" target="_blank">
+          ⚡ Raw JSON API
+        </a>
+      </div>
+    </section>
+
+    <!-- Metrics Overview -->
+    <section class="stats-grid">
+      <div class="stat-box">
+        <div id="stat-total-jobs" class="stat-num">0</div>
+        <div class="stat-label">Total Vacancies</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-companies" class="stat-num">0</div>
+        <div class="stat-label">Hiring Companies</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-remote-jobs" class="stat-num">0</div>
+        <div class="stat-label">Remote / Hybrid</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-alumni-postings" class="stat-num">0</div>
+        <div class="stat-label">Alumni Authors</div>
+      </div>
+    </section>
+
+    <!-- Toolbar Controls -->
+    <section class="card" style="padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+      <div class="toolbar" style="margin-bottom: 0;">
+        <div class="toolbar-left">
+          <input
+            type="text"
+            id="search-input"
+            class="search-input"
+            placeholder="🔍 Search title, company, location, or author..."
+          />
+          <select id="location-filter" class="filter-select">
+            <option value="all">All Locations</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="onsite">On-site</option>
+          </select>
+        </div>
+        <div>
+          <button id="btn-refresh-jobs" class="btn-sm btn-view">🔄 Refresh</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Job Cards Grid -->
+    <section>
+      <div id="jobs-grid" class="job-grid">
+        <!-- Dynamically rendered job cards -->
+      </div>
+      <div id="empty-state" class="empty-state" style="display: none;">
+        <div class="empty-icon">💼</div>
+        <h3>No job postings found</h3>
+        <p>No career vacancies matched your search query or filter criteria.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Alumni Tracking System &bull; MVC Relational Implementation &bull; Week 6 Homework</p>
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: POST A JOB -->
+  <!-- ========================================================================= -->
+  <div id="modalCreateJob" class="modal-overlay" data-modal="create-job-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Publish Job Vacancy</h3>
+        <button class="modal-close" data-close-modal="modalCreateJob">&times;</button>
+      </div>
+      <form id="create-job-form" action="/jobs" method="POST">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="create-author-user">Author / Posted By *</label>
+            <select id="create-author-user" name="userId" class="form-control" required>
+              <option value="" disabled selected>Select authoring alumni / recruiter...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-job-title">Job Title *</label>
+            <input type="text" id="create-job-title" name="title" class="form-control" placeholder="e.g. Senior Backend Engineer" required minlength="2">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="create-job-company">Hiring Company *</label>
+              <input type="text" id="create-job-company" name="company" class="form-control" placeholder="e.g. Stripe, NASA, Google" required minlength="2">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="create-job-location">Location / Work Mode</label>
+              <input type="text" id="create-job-location" name="location" class="form-control" placeholder="e.g. San Francisco, CA (Remote)">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="create-job-description">Job Description &amp; Requirements</label>
+            <textarea id="create-job-description" name="description" class="form-control" rows="4" placeholder="Responsibilities, technical qualifications, and team culture..."></textarea>
+          </div>
+          <div id="create-job-error" class="form-error" style="display: none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-sm btn-view" data-close-modal="modalCreateJob">Cancel</button>
+          <button type="submit" id="create-job-submit-btn" class="btn-sm btn-edit" style="background: var(--primary); color: #fff;">
+            Publish Opportunity
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: APPLY TO JOB -->
+  <!-- ========================================================================= -->
+  <div id="modalApplyJob" class="modal-overlay" data-modal="apply-job-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Submit Application</h3>
+        <button class="modal-close" data-close-modal="modalApplyJob">&times;</button>
+      </div>
+      <form id="apply-job-form">
+        <input type="hidden" id="apply-job-id" name="jobId">
+        <div class="modal-body">
+          <div class="card" style="padding: 1rem; margin-bottom: 1.25rem; background: rgba(37, 99, 235, 0.1); border-color: rgba(37, 99, 235, 0.3);">
+            <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary);">Target Opportunity</div>
+            <div id="apply-job-display-title" style="font-size: 1.15rem; font-weight: 700; color: #fff; margin-top: 0.25rem;"></div>
+            <div id="apply-job-display-company" style="font-size: 0.9rem; color: #93c5fd; margin-top: 0.2rem;"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="apply-candidate-user">Candidate Applicant *</label>
+            <select id="apply-candidate-user" name="userId" class="form-control" required>
+              <option value="" disabled selected>Select candidate / student applicant...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="apply-status">Initial Status</label>
+            <select id="apply-status" name="status" class="form-control">
+              <option value="applied" selected>Applied (Standard submission)</option>
+              <option value="interview">Interview Scheduled</option>
+            </select>
+          </div>
+
+          <div id="apply-job-error" class="form-error" style="display: none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-sm btn-view" data-close-modal="modalApplyJob">Cancel</button>
+          <button type="submit" id="apply-job-submit-btn" class="btn-sm btn-edit" style="background: var(--accent-green); color: #fff;">
+            Confirm Application
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: VIEW JOB DETAILS -->
+  <!-- ========================================================================= -->
+  <div id="modalViewJob" class="modal-overlay" data-modal="view-job-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="view-job-title" class="modal-title">Job Details</h3>
+        <button class="modal-close" data-close-modal="modalViewJob">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1rem;">
+          <span id="view-job-company" style="font-size: 1.1rem; font-weight: 600; color: var(--primary);"></span>
+          <span id="view-job-location" style="margin-left: 0.75rem; font-size: 0.9rem; color: var(--text-muted);"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Published By</label>
+          <div id="view-job-author" style="color: #cbd5e1; font-weight: 500;"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description &amp; Requirements</label>
+          <div id="view-job-desc" style="white-space: pre-wrap; color: #f1f5f9; line-height: 1.6; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;"></div>
+        </div>
+        <div class="form-group" style="font-size: 0.8rem; color: var(--text-muted);">
+          <span>Date Posted: <strong id="view-job-date"></strong></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-sm btn-view" data-close-modal="modalViewJob">Close</button>
+        <button type="button" id="view-job-apply-btn" class="btn-sm btn-edit" style="background: var(--accent-green); color: #fff;">
+          Apply to this Job
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Client-side Application Logic -->
+  <script>
+    let allJobs = [];
+    let allUsers = [];
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      const icon = type === 'success' ? '✅' : '⚠️';
+      toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.remove('active');
+    }
+
+    function populateUserSelects() {
+      const authorSelect = document.getElementById('create-author-user');
+      const candidateSelect = document.getElementById('apply-candidate-user');
+
+      if (authorSelect) {
+        authorSelect.innerHTML = '<option value="" disabled selected>Select authoring alumni / recruiter...</option>';
+        allUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = `${u.name} (${u.role || 'alumni'}) — ${u.email}`;
+          authorSelect.appendChild(opt);
+        });
+      }
+
+      if (candidateSelect) {
+        candidateSelect.innerHTML = '<option value="" disabled selected>Select candidate / student applicant...</option>';
+        allUsers.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = `${u.name} (${u.role || 'student'}) — ${u.email}`;
+          candidateSelect.appendChild(opt);
+        });
+      }
+    }
+
+    function updateStats(jobs) {
+      document.getElementById('stat-total-jobs').textContent = jobs.length;
+
+      const uniqueCompanies = new Set(jobs.map(j => (j.company || '').trim().toLowerCase())).size;
+      document.getElementById('stat-companies').textContent = uniqueCompanies;
+
+      const remoteCount = jobs.filter(j => {
+        const loc = (j.location || '').toLowerCase();
+        return loc.includes('remote') || loc.includes('hybrid');
+      }).length;
+      document.getElementById('stat-remote-jobs').textContent = remoteCount;
+
+      const uniqueAuthors = new Set(jobs.map(j => j.userId || j.user_id)).size;
+      document.getElementById('stat-alumni-postings').textContent = uniqueAuthors;
+    }
+
+    function renderJobs(jobs) {
+      const grid = document.getElementById('jobs-grid');
+      const emptyState = document.getElementById('empty-state');
+      grid.innerHTML = '';
+
+      if (!jobs || jobs.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      jobs.forEach(job => {
+        const card = document.createElement('article');
+        card.className = 'job-card';
+        card.dataset.id = job.id;
+
+        const authorName = job.authorName || (allUsers.find(u => u.id === (job.userId || job.user_id))?.name) || 'Registered Member';
+        const locationText = job.location ? `📍 ${job.location}` : '📍 Location not specified';
+        const snippet = job.description ? (job.description.length > 150 ? job.description.substring(0, 150) + '...' : job.description) : 'No description provided.';
+        const postedDate = job.createdAt || job.created_at ? new Date(job.createdAt || job.created_at).toLocaleDateString() : 'Recently';
+
+        card.innerHTML = `
+          <div class="job-card-header">
+            <h3 class="job-card-title">${escapeHtml(job.title)}</h3>
+            <div class="job-card-company">🏢 ${escapeHtml(job.company)}</div>
+            <div class="job-card-meta">
+              <span class="job-card-meta-item">${escapeHtml(locationText)}</span>
+              <span class="job-card-meta-item">🗓️ ${postedDate}</span>
+            </div>
+          </div>
+          <div class="job-card-description">
+            ${escapeHtml(snippet)}
+          </div>
+          <div class="job-card-footer">
+            <div class="job-card-author">Posted by: <strong>${escapeHtml(authorName)}</strong></div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn-sm btn-view btn-view-job" data-id="${job.id}">Details</button>
+              <button class="btn-sm btn-edit btn-apply-job" data-id="${job.id}" data-title="${escapeHtml(job.title)}" data-company="${escapeHtml(job.company)}" style="background: var(--accent-green); color: #fff;">Apply</button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function filterJobs() {
+      const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+      const locFilter = document.getElementById('location-filter')?.value || 'all';
+
+      const filtered = allJobs.filter(job => {
+        const titleMatch = (job.title || '').toLowerCase().includes(q);
+        const companyMatch = (job.company || '').toLowerCase().includes(q);
+        const locationMatch = (job.location || '').toLowerCase().includes(q);
+        const authorMatch = (job.authorName || '').toLowerCase().includes(q);
+        const matchesQuery = !q || titleMatch || companyMatch || locationMatch || authorMatch;
+
+        let matchesLoc = true;
+        const locLower = (job.location || '').toLowerCase();
+        if (locFilter === 'remote') matchesLoc = locLower.includes('remote');
+        else if (locFilter === 'hybrid') matchesLoc = locLower.includes('hybrid');
+        else if (locFilter === 'onsite') matchesLoc = !locLower.includes('remote') && !locLower.includes('hybrid');
+
+        return matchesQuery && matchesLoc;
+      });
+
+      renderJobs(filtered);
+    }
+
+    async function loadJobs(fromApi = false) {
+      try {
+        if (!fromApi) {
+          const initialJobsEl = document.getElementById('initial-jobs-data');
+          const initialUsersEl = document.getElementById('initial-users-data');
+
+          if (initialJobsEl && initialJobsEl.textContent.trim()) {
+            allJobs = JSON.parse(initialJobsEl.textContent);
+          }
+          if (initialUsersEl && initialUsersEl.textContent.trim()) {
+            allUsers = JSON.parse(initialUsersEl.textContent);
+          }
+        }
+
+        if (fromApi || allJobs.length === 0 || allUsers.length === 0) {
+          const [jobsRes, usersRes] = await Promise.all([
+            fetch('/api/jobs'),
+            fetch('/api/users')
+          ]);
+          if (jobsRes.ok) allJobs = await jobsRes.json();
+          if (usersRes.ok) allUsers = await usersRes.json();
+        }
+
+        populateUserSelects();
+        updateStats(allJobs);
+        filterJobs();
+      } catch (err) {
+        console.error('Failed to load jobs data:', err);
+        showToast('Failed to load job listings.', 'error');
+      }
+    }
+
+    function openApplyModal(jobId, jobTitle, company) {
+      document.getElementById('apply-job-id').value = jobId;
+      document.getElementById('apply-job-display-title').textContent = jobTitle;
+      document.getElementById('apply-job-display-company').textContent = company;
+      document.getElementById('apply-job-error').style.display = 'none';
+      openModal('modalApplyJob');
+    }
+
+    function openJobDetails(jobId) {
+      const job = allJobs.find(j => j.id === jobId);
+      if (!job) return;
+
+      document.getElementById('view-job-title').textContent = job.title;
+      document.getElementById('view-job-company').textContent = job.company;
+      document.getElementById('view-job-location').textContent = job.location ? `📍 ${job.location}` : '📍 Remote';
+      
+      const authorName = job.authorName || (allUsers.find(u => u.id === (job.userId || job.user_id))?.name) || 'Registered Member';
+      document.getElementById('view-job-author').textContent = `${authorName} (${job.authorEmail || ''})`;
+      document.getElementById('view-job-desc').textContent = job.description || 'No detailed description provided.';
+      document.getElementById('view-job-date').textContent = job.createdAt || job.created_at ? new Date(job.createdAt || job.created_at).toLocaleString() : 'N/A';
+
+      const applyBtn = document.getElementById('view-job-apply-btn');
+      applyBtn.onclick = () => {
+        closeModal('modalViewJob');
+        openApplyModal(job.id, job.title, job.company);
+      };
+
+      openModal('modalViewJob');
+    }
+
+    async function handleCreateJobSubmit(e) {
+      e.preventDefault();
+      const form = e.target;
+      const errorDiv = document.getElementById('create-job-error');
+      errorDiv.style.display = 'none';
+
+      const userId = document.getElementById('create-author-user').value;
+      const title = document.getElementById('create-job-title').value.trim();
+      const company = document.getElementById('create-job-company').value.trim();
+      const location = document.getElementById('create-job-location').value.trim();
+      const description = document.getElementById('create-job-description').value.trim();
+
+      if (!userId) {
+        errorDiv.textContent = 'Please select an authoring user.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        // Use nested route: POST /api/users/:userId/jobs
+        const res = await fetch(`/api/users/${encodeURIComponent(userId)}/jobs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, company, location, description }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Failed to publish job.');
+        }
+
+        closeModal('modalCreateJob');
+        form.reset();
+        showToast('🎉 Job posting published successfully!');
+        await loadJobs(true);
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+      }
+    }
+
+    async function handleApplyJobSubmit(e) {
+      e.preventDefault();
+      const errorDiv = document.getElementById('apply-job-error');
+      errorDiv.style.display = 'none';
+
+      const jobId = document.getElementById('apply-job-id').value;
+      const userId = document.getElementById('apply-candidate-user').value;
+      const status = document.getElementById('apply-status').value || 'applied';
+
+      if (!userId) {
+        errorDiv.textContent = 'Please select a candidate applicant.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        // Use nested route: POST /api/jobs/:id/applications
+        const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/applications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, status }),
+        });
+
+        const data = await res.json();
+
+        // STRICT BUSINESS RULE: Catch 409 Conflict gracefully
+        if (res.status === 409) {
+          const conflictMsg = data.message || 'Candidate has already applied for this job posting';
+          errorDiv.textContent = `⚠️ Conflict: ${conflictMsg}`;
+          errorDiv.style.display = 'block';
+          showToast(`⚠️ Conflict: ${conflictMsg}`, 'error');
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(data.message || 'Application failed.');
+        }
+
+        closeModal('modalApplyJob');
+        showToast('🎉 Application submitted successfully!');
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+        showToast(err.message, 'error');
+      }
+    }
+
+    function attachEventListeners() {
+      // Open Create Modal
+      const btnPostJob = document.getElementById('btnPostJob');
+      if (btnPostJob) {
+        btnPostJob.addEventListener('click', () => {
+          document.getElementById('create-job-error').style.display = 'none';
+          openModal('modalCreateJob');
+        });
+      }
+
+      // Refresh button
+      const btnRefresh = document.getElementById('btn-refresh-jobs');
+      if (btnRefresh) {
+        btnRefresh.addEventListener('click', () => loadJobs(true));
+      }
+
+      // Filter events
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.addEventListener('input', filterJobs);
+      }
+      const locFilter = document.getElementById('location-filter');
+      if (locFilter) {
+        locFilter.addEventListener('change', filterJobs);
+      }
+
+      // Form submissions
+      const createForm = document.getElementById('create-job-form');
+      if (createForm) {
+        createForm.addEventListener('submit', handleCreateJobSubmit);
+      }
+      const applyForm = document.getElementById('apply-job-form');
+      if (applyForm) {
+        applyForm.addEventListener('submit', handleApplyJobSubmit);
+      }
+
+      // Event delegation for grid buttons
+      const grid = document.getElementById('jobs-grid');
+      if (grid) {
+        grid.addEventListener('click', (e) => {
+          const viewBtn = e.target.closest('.btn-view-job');
+          if (viewBtn) {
+            openJobDetails(viewBtn.dataset.id);
+            return;
+          }
+          const applyBtn = e.target.closest('.btn-apply-job');
+          if (applyBtn) {
+            openApplyModal(applyBtn.dataset.id, applyBtn.dataset.title, applyBtn.dataset.company);
+          }
+        });
+      }
+
+      // Close modal bindings
+      document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeModal(overlay.id);
+        });
+      });
+
+      document.querySelectorAll('.modal-close, [data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const modalId = btn.getAttribute('data-close-modal');
+          if (modalId) {
+            closeModal(modalId);
+          } else {
+            const overlay = btn.closest('.modal-overlay');
+            if (overlay) closeModal(overlay.id);
+          }
+        });
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      attachEventListeners();
+      loadJobs();
+
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('status') === 'created') {
+        showToast('New job opportunity published!');
+      } else if (urlParams.get('status') === 'deleted') {
+        showToast('Job posting deleted.');
+      } else if (urlParams.get('error')) {
+        showToast(decodeURIComponent(urlParams.get('error')), 'error');
+      } else if (urlParams.get('view')) {
+        setTimeout(() => openJobDetails(urlParams.get('view')), 200);
+      }
+    });
+  </script>
+</body>
+</html>

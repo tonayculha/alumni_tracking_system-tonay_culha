@@ -34,6 +34,10 @@ class ApplicationModel {
       jobPostingId: row.job_posting_id,
       job_posting_id: row.job_posting_id,
       status: row.status,
+      candidateName: row.candidate_name || null,
+      candidateEmail: row.candidate_email || null,
+      jobTitle: row.job_title || null,
+      company: row.company || null,
       createdAt: createdAtIso,
       updatedAt: updatedAtIso,
       created_at: createdAtIso,
@@ -47,9 +51,13 @@ class ApplicationModel {
    */
   async findAll() {
     const res = await query(
-      `SELECT id, user_id, job_posting_id, status, created_at, updated_at 
-       FROM applications 
-       ORDER BY created_at DESC`
+      `SELECT a.id, a.user_id, a.job_posting_id, a.status, a.created_at, a.updated_at,
+              u.name AS candidate_name, u.email AS candidate_email,
+              j.title AS job_title, j.company AS company
+       FROM applications a
+       LEFT JOIN users u ON a.user_id = u.id
+       LEFT JOIN job_postings j ON a.job_posting_id = j.id
+       ORDER BY a.created_at DESC`
     );
     return res.rows.map((row) => this._mapApplication(row));
   }
@@ -62,9 +70,13 @@ class ApplicationModel {
   async findById(id) {
     if (!this._isValidUuid(id)) return null;
     const res = await query(
-      `SELECT id, user_id, job_posting_id, status, created_at, updated_at 
-       FROM applications 
-       WHERE id = $1`,
+      `SELECT a.id, a.user_id, a.job_posting_id, a.status, a.created_at, a.updated_at,
+              u.name AS candidate_name, u.email AS candidate_email,
+              j.title AS job_title, j.company AS company
+       FROM applications a
+       LEFT JOIN users u ON a.user_id = u.id
+       LEFT JOIN job_postings j ON a.job_posting_id = j.id
+       WHERE a.id = $1`,
       [id.trim()]
     );
     if (!res.rows || res.rows.length === 0) return null;
@@ -79,10 +91,14 @@ class ApplicationModel {
   async findByJobId(jobId) {
     if (!this._isValidUuid(jobId)) return [];
     const res = await query(
-      `SELECT id, user_id, job_posting_id, status, created_at, updated_at 
-       FROM applications 
-       WHERE job_posting_id = $1 
-       ORDER BY created_at DESC`,
+      `SELECT a.id, a.user_id, a.job_posting_id, a.status, a.created_at, a.updated_at,
+              u.name AS candidate_name, u.email AS candidate_email,
+              j.title AS job_title, j.company AS company
+       FROM applications a
+       LEFT JOIN users u ON a.user_id = u.id
+       LEFT JOIN job_postings j ON a.job_posting_id = j.id
+       WHERE a.job_posting_id = $1 
+       ORDER BY a.created_at DESC`,
       [jobId.trim()]
     );
     return res.rows.map((row) => this._mapApplication(row));
@@ -96,10 +112,14 @@ class ApplicationModel {
   async findByUserId(userId) {
     if (!this._isValidUuid(userId)) return [];
     const res = await query(
-      `SELECT id, user_id, job_posting_id, status, created_at, updated_at 
-       FROM applications 
-       WHERE user_id = $1 
-       ORDER BY created_at DESC`,
+      `SELECT a.id, a.user_id, a.job_posting_id, a.status, a.created_at, a.updated_at,
+              u.name AS candidate_name, u.email AS candidate_email,
+              j.title AS job_title, j.company AS company
+       FROM applications a
+       LEFT JOIN users u ON a.user_id = u.id
+       LEFT JOIN job_postings j ON a.job_posting_id = j.id
+       WHERE a.user_id = $1 
+       ORDER BY a.created_at DESC`,
       [userId.trim()]
     );
     return res.rows.map((row) => this._mapApplication(row));

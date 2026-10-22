@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alumni Tracking System | Candidate Applications</title>
+  <meta name="description" content="Manage and track job applications across alumni and partner vacancies.">
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- INITIAL_APPLICATIONS_DATA -->
+</head>
+<body>
+  <header>
+    <div class="nav-container">
+      <a href="/home" class="brand">
+        🎓 Alumni System
+        <span class="brand-badge">Core v1.0</span>
+      </a>
+      <nav>
+        <ul>
+          <li><a href="/home">Home</a></li>
+          <li><a href="/users">Users</a></li>
+          <li><a href="/announcements">Announcements</a></li>
+          <li><a href="/jobs">Jobs</a></li>
+          <li><a href="/applications" class="active">Applications</a></li>
+          <li><a href="/about">About</a></li>
+          <li><a href="/api/swagger" target="_blank">Swagger Docs</a></li>
+          <li><a href="/api/applications" target="_blank">Applications API</a></li>
+          <li><a href="/api/health" target="_blank">Health</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" style="padding-bottom: 1.5rem;">
+      <div class="hero-tag">Relational Many-to-Many Join &bull; Workflow State Machine</div>
+      <h1>Candidate Applications &amp; Tracking</h1>
+      <p>
+        Monitor candidate career submissions, inspect application lifecycle states, 
+        and prevent duplicate applications through relational constraints.
+      </p>
+      <div class="btn-group">
+        <button id="btnCreateApplication" class="btn btn-primary">
+          📝 Submit Application
+        </button>
+        <a href="/jobs" class="btn btn-secondary">
+          💼 Browse Open Jobs
+        </a>
+        <a href="/api/applications" class="btn btn-secondary" target="_blank">
+          ⚡ Raw JSON API
+        </a>
+      </div>
+    </section>
+
+    <!-- Metrics Overview -->
+    <section class="stats-grid">
+      <div class="stat-box">
+        <div id="stat-total-apps" class="stat-num">0</div>
+        <div class="stat-label">Total Submissions</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-applied" class="stat-num">0</div>
+        <div class="stat-label">Applied</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-interview" class="stat-num">0</div>
+        <div class="stat-label">Interviewing</div>
+      </div>
+      <div class="stat-box">
+        <div id="stat-accepted" class="stat-num">0</div>
+        <div class="stat-label">Accepted</div>
+      </div>
+    </section>
+
+    <!-- Toolbar Controls -->
+    <section class="card" style="padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+      <div class="toolbar" style="margin-bottom: 0;">
+        <div class="toolbar-left">
+          <input
+            type="text"
+            id="search-input"
+            class="search-input"
+            placeholder="🔍 Search candidate, job title, or company..."
+          />
+          <select id="status-filter" class="filter-select">
+            <option value="all">All Statuses</option>
+            <option value="applied">Applied</option>
+            <option value="interview">Interview</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div>
+          <button id="btn-refresh-apps" class="btn-sm btn-view">🔄 Refresh</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Applications Table -->
+    <section class="card" style="padding: 0; overflow: hidden;">
+      <div style="overflow-x: auto;">
+        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--card-border); background: rgba(255, 255, 255, 0.03);">
+              <th style="padding: 1rem 1.25rem;">Candidate</th>
+              <th style="padding: 1rem 1.25rem;">Position &amp; Company</th>
+              <th style="padding: 1rem 1.25rem;">Status</th>
+              <th style="padding: 1rem 1.25rem;">Applied At</th>
+              <th style="padding: 1rem 1.25rem; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="applications-table-body">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+      <div id="empty-state" class="empty-state" style="display: none;">
+        <div class="empty-icon">📭</div>
+        <h3>No applications found</h3>
+        <p>No job application submissions matched your search query or filter criteria.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Alumni Tracking System &bull; MVC Relational Implementation &bull; Week 6 Homework</p>
+  </footer>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: SUBMIT APPLICATION -->
+  <!-- ========================================================================= -->
+  <div id="modalCreateApplication" class="modal-overlay" data-modal="create-app-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Submit Candidate Application</h3>
+        <button class="modal-close" data-close-modal="modalCreateApplication">&times;</button>
+      </div>
+      <form id="create-app-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="select-job-target">Target Job Posting *</label>
+            <select id="select-job-target" name="jobId" class="form-control" required>
+              <option value="" disabled selected>Select vacancy position...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-candidate-user">Candidate Applicant *</label>
+            <select id="select-candidate-user" name="userId" class="form-control" required>
+              <option value="" disabled selected>Select candidate / student applicant...</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-app-status">Application Status</label>
+            <select id="select-app-status" name="status" class="form-control">
+              <option value="applied" selected>Applied</option>
+              <option value="interview">Interview</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <div id="create-app-error" class="form-error" style="display: none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-sm btn-view" data-close-modal="modalCreateApplication">Cancel</button>
+          <button type="submit" id="create-app-submit-btn" class="btn-sm btn-edit" style="background: var(--accent-green); color: #fff;">
+            Record Application
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Client Application Logic -->
+  <script>
+    let allApplications = [];
+    let allJobs = [];
+    let allUsers = [];
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      const icon = type === 'success' ? '✅' : '⚠️';
+      toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.remove('active');
+    }
+
+    function populateSelects() {
+      const jobSelect = document.getElementById('select-job-target');
+      const candidateSelect = document.getElementById('select-candidate-user');
+
+      if (jobSelect) {
+        jobSelect.innerHTML = '<option value="" disabled selected>Select vacancy position...</option>';
+        allJobs.forEach(job => {
+          const opt = document.createElement('option');
+          opt.value = job.id;
+          opt.textContent = `${job.title} @ ${job.company}`;
+          jobSelect.appendChild(opt);
+        });
+      }
+
+      if (candidateSelect) {
+        candidateSelect.innerHTML = '<option value="" disabled selected>Select candidate / student applicant...</option>';
+        allUsers.forEach(user => {
+          const opt = document.createElement('option');
+          opt.value = user.id;
+          opt.textContent = `${user.name} (${user.role || 'candidate'}) — ${user.email}`;
+          candidateSelect.appendChild(opt);
+        });
+      }
+    }
+
+    function updateStats(apps) {
+      document.getElementById('stat-total-apps').textContent = apps.length;
+      document.getElementById('stat-applied').textContent = apps.filter(a => (a.status || 'applied') === 'applied').length;
+      document.getElementById('stat-interview').textContent = apps.filter(a => a.status === 'interview').length;
+      document.getElementById('stat-accepted').textContent = apps.filter(a => a.status === 'accepted').length;
+    }
+
+    function renderTable(apps) {
+      const tbody = document.getElementById('applications-table-body');
+      const emptyState = document.getElementById('empty-state');
+      tbody.innerHTML = '';
+
+      if (!apps || apps.length === 0) {
+        emptyState.style.display = 'block';
+        return;
+      }
+      emptyState.style.display = 'none';
+
+      apps.forEach(app => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+        tr.dataset.id = app.id;
+
+        const candidateName = app.candidateName || allUsers.find(u => u.id === (app.userId || app.user_id))?.name || 'Applicant User';
+        const candidateEmail = app.candidateEmail || allUsers.find(u => u.id === (app.userId || app.user_id))?.email || '';
+        const jobTitle = app.jobTitle || allJobs.find(j => j.id === (app.jobPostingId || app.job_posting_id))?.title || 'Job Vacancy';
+        const company = app.company || app.jobCompany || allJobs.find(j => j.id === (app.jobPostingId || app.job_posting_id))?.company || 'Organization';
+        const status = (app.status || 'applied').toLowerCase();
+        const dateStr = app.createdAt || app.created_at ? new Date(app.createdAt || app.created_at).toLocaleDateString() : 'Recent';
+
+        tr.innerHTML = `
+          <td style="padding: 1rem 1.25rem;">
+            <div style="font-weight: 600; color: #fff;">${escapeHtml(candidateName)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(candidateEmail)}</div>
+          </td>
+          <td style="padding: 1rem 1.25rem;">
+            <div style="font-weight: 600; color: #e2e8f0;">${escapeHtml(jobTitle)}</div>
+            <div style="font-size: 0.85rem; color: var(--primary);">${escapeHtml(company)}</div>
+          </td>
+          <td style="padding: 1rem 1.25rem;">
+            <span class="badge badge-status-${status}">${status.toUpperCase()}</span>
+          </td>
+          <td style="padding: 1rem 1.25rem; font-size: 0.85rem; color: var(--text-muted);">
+            ${dateStr}
+          </td>
+          <td style="padding: 1rem 1.25rem; text-align: right;">
+            <button class="btn-sm btn-delete btn-delete-app" data-id="${app.id}" data-candidate="${escapeHtml(candidateName)}" style="padding: 0.35rem 0.65rem;">
+              Withdraw
+            </button>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function filterApplications() {
+      const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+      const statusFilter = document.getElementById('status-filter')?.value || 'all';
+
+      const filtered = allApplications.filter(app => {
+        const candidate = (app.candidateName || allUsers.find(u => u.id === (app.userId || app.user_id))?.name || '').toLowerCase();
+        const job = (app.jobTitle || allJobs.find(j => j.id === (app.jobPostingId || app.job_posting_id))?.title || '').toLowerCase();
+        const company = (app.company || app.jobCompany || allJobs.find(j => j.id === (app.jobPostingId || app.job_posting_id))?.company || '').toLowerCase();
+        const status = (app.status || 'applied').toLowerCase();
+
+        const matchesQuery = !q || candidate.includes(q) || job.includes(q) || company.includes(q);
+        const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+        return matchesQuery && matchesStatus;
+      });
+
+      renderTable(filtered);
+    }
+
+    async function loadApplications(fromApi = false) {
+      try {
+        if (!fromApi) {
+          const initialAppsEl = document.getElementById('initial-applications-data');
+          const initialJobsEl = document.getElementById('initial-jobs-data');
+          const initialUsersEl = document.getElementById('initial-users-data');
+
+          if (initialAppsEl && initialAppsEl.textContent.trim()) {
+            allApplications = JSON.parse(initialAppsEl.textContent);
+          }
+          if (initialJobsEl && initialJobsEl.textContent.trim()) {
+            allJobs = JSON.parse(initialJobsEl.textContent);
+          }
+          if (initialUsersEl && initialUsersEl.textContent.trim()) {
+            allUsers = JSON.parse(initialUsersEl.textContent);
+          }
+        }
+
+        if (fromApi || allApplications.length === 0 || allJobs.length === 0 || allUsers.length === 0) {
+          const [appsRes, jobsRes, usersRes] = await Promise.all([
+            fetch('/api/applications'),
+            fetch('/api/jobs'),
+            fetch('/api/users'),
+          ]);
+          if (appsRes.ok) allApplications = await appsRes.json();
+          if (jobsRes.ok) allJobs = await jobsRes.json();
+          if (usersRes.ok) allUsers = await usersRes.json();
+        }
+
+        populateSelects();
+        updateStats(allApplications);
+        filterApplications();
+      } catch (err) {
+        console.error('Failed to load applications data:', err);
+        showToast('Failed to load applications.', 'error');
+      }
+    }
+
+    async function handleCreateApplicationSubmit(e) {
+      e.preventDefault();
+      const form = e.target;
+      const errorDiv = document.getElementById('create-app-error');
+      errorDiv.style.display = 'none';
+
+      const jobId = document.getElementById('select-job-target').value;
+      const userId = document.getElementById('select-candidate-user').value;
+      const status = document.getElementById('select-app-status').value || 'applied';
+
+      if (!jobId || !userId) {
+        errorDiv.textContent = 'Please select both a job vacancy and a candidate applicant.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        // Use nested route: POST /api/jobs/:id/applications
+        const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/applications`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, status }),
+        });
+
+        const data = await res.json();
+
+        // STRICT BUSINESS RULE: Catch 409 Conflict gracefully
+        if (res.status === 409) {
+          const conflictMsg = data.message || 'Candidate has already applied for this job posting';
+          errorDiv.textContent = `⚠️ Conflict: ${conflictMsg}`;
+          errorDiv.style.display = 'block';
+          showToast(`⚠️ Conflict: ${conflictMsg}`, 'error');
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(data.message || 'Application submission failed.');
+        }
+
+        closeModal('modalCreateApplication');
+        form.reset();
+        showToast('🎉 Application recorded successfully!');
+        await loadApplications(true);
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.style.display = 'block';
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteApplication(id, candidateName) {
+      if (!confirm(`Are you sure you want to withdraw the application for "${candidateName}"?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/applications/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.message || 'Failed to delete application.');
+        }
+
+        showToast('Application withdrawn successfully.');
+        await loadApplications(true);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function attachEventListeners() {
+      const btnCreate = document.getElementById('btnCreateApplication');
+      if (btnCreate) {
+        btnCreate.addEventListener('click', () => {
+          document.getElementById('create-app-error').style.display = 'none';
+          openModal('modalCreateApplication');
+        });
+      }
+
+      const btnRefresh = document.getElementById('btn-refresh-apps');
+      if (btnRefresh) {
+        btnRefresh.addEventListener('click', () => loadApplications(true));
+      }
+
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.addEventListener('input', filterApplications);
+      }
+
+      const statusFilter = document.getElementById('status-filter');
+      if (statusFilter) {
+        statusFilter.addEventListener('change', filterApplications);
+      }
+
+      const form = document.getElementById('create-app-form');
+      if (form) {
+        form.addEventListener('submit', handleCreateApplicationSubmit);
+      }
+
+      const tbody = document.getElementById('applications-table-body');
+      if (tbody) {
+        tbody.addEventListener('click', (e) => {
+          const delBtn = e.target.closest('.btn-delete-app');
+          if (delBtn) {
+            deleteApplication(delBtn.dataset.id, delBtn.dataset.candidate || 'this candidate');
+          }
+        });
+      }
+
+      document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', (e) => {
+          if (e.target === overlay) closeModal(overlay.id);
+        });
+      });
+
+      document.querySelectorAll('.modal-close, [data-close-modal]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const modalId = btn.getAttribute('data-close-modal');
+          if (modalId) {
+            closeModal(modalId);
+          } else {
+            const overlay = btn.closest('.modal-overlay');
+            if (overlay) closeModal(overlay.id);
+          }
+        });
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      attachEventListeners();
+      loadApplications();
+
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('status') === 'created') {
+        showToast('Application submitted successfully!');
+      } else if (urlParams.get('status') === 'deleted') {
+        showToast('Application removed.');
+      } else if (urlParams.get('error')) {
+        showToast(decodeURIComponent(urlParams.get('error')), 'error');
+      }
+    });
+  </script>
+</body>
+</html>
