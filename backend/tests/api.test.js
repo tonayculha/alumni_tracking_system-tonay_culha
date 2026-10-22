@@ -15,6 +15,7 @@ const { resetUsers } = require('../src/services/user.service');
 const { userModel, UserModel } = require('../src/models/user.model');
 const { resetAnnouncements } = require('../src/services/announcement.service');
 const { announcementModel, AnnouncementModel } = require('../src/models/announcement.model');
+const { jobPostingFactory } = require('../src/db/factories/jobPostingFactory');
 
 describe('Alumni Tracking System API Test Suite', () => {
   let server;
@@ -969,4 +970,259 @@ describe('Alumni Tracking System API Test Suite', () => {
       assert.strictEqual(checkRes.statusCode, 404);
     });
   });
+
+  /* =========================================================================
+   * WEEK 6: Job Postings & Nested Routing (/api/jobs, /api/users/:id/jobs)
+   * ========================================================================= */
+  describe('Week 6: Job Postings API & Nested Routing', () => {
+    const seedUserId = '11111111-1111-4111-a111-111111111111'; // Ada Lovelace
+    let createdJobId;
+
+    before(async () => {
+      await jobPostingFactory.seed();
+    });
+
+    test('POST /api/users/:id/jobs creates job posting strictly using param ID', async () => {
+      const spoofedUserId = '22222222-2222-4222-a222-222222222222';
+      const res = await apiRequest('POST', `/api/users/${seedUserId}/jobs`, {
+        userId: spoofedUserId, // Should be ignored in favor of path param
+        title: 'Staff Software Architect',
+        company: 'Ada Research Labs',
+        location: 'London, UK / Remote',
+        description: 'Lead research in advanced computing paradigms.',
+      });
+
+      assert.strictEqual(res.statusCode, 201);
+      const data = res.json();
+      assert.strictEqual(data.title, 'Staff Software Architect');
+      assert.strictEqual(data.company, 'Ada Research Labs');
+      assert.strictEqual(data.userId, seedUserId); // Strict extraction from URL param
+      assert.ok(data.id);
+      createdJobId = data.id;
+    });
+
+    test('POST /api/users/:id/jobs returns 404 for non-existent user ID', async () => {
+      const nonExistentId = '99999999-9999-9999-9999-999999999999';
+      const res = await apiRequest('POST', `/api/users/${nonExistentId}/jobs`, {
+        title: 'Ghost Engineer',
+        company: 'Phantom Corp',
+      });
+
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /api/users/:id/jobs returns 400 for missing title or company', async () => {
+      const res = await apiRequest('POST', `/api/users/${seedUserId}/jobs`, {
+        title: '',
+        company: 'Missing Title Inc.',
+      });
+
+      assert.strictEqual(res.statusCode, 400);
+    });
+
+    test('GET /api/users/:id/jobs returns list of jobs authored by user', async () => {
+      const res = await request(`/api/users/${seedUserId}/jobs`);
+      assert.strictEqual(res.statusCode, 200);
+      const jobs = res.json();
+      assert.ok(Array.isArray(jobs));
+      assert.ok(jobs.some((j) => j.id === createdJobId && j.userId === seedUserId));
+    });
+
+    test('GET /api/jobs returns all job postings', async () => {
+      const res = await request('/api/jobs');
+      assert.strictEqual(res.statusCode, 200);
+      const jobs = res.json();
+      assert.ok(Array.isArray(jobs));
+      assert.ok(jobs.some((j) => j.id === createdJobId));
+    });
+
+    test('GET /api/jobs/:id returns single job posting details', async () => {
+      const res = await request(`/api/jobs/${createdJobId}`);
+      assert.strictEqual(res.statusCode, 200);
+      const job = res.json();
+      assert.strictEqual(job.id, createdJobId);
+      assert.strictEqual(job.title, 'Staff Software Architect');
+    });
+
+    test('PUT /api/jobs/:id updates job posting details', async () => {
+      const res = await apiRequest('PUT', `/api/jobs/${createdJobId}`, {
+        title: 'Principal Software Architect',
+        company: 'Ada Research Labs',
+        location: 'Oxford, UK',
+      });
+
+      assert.strictEqual(res.statusCode, 200);
+      const job = res.json();
+      assert.strictEqual(job.title, 'Principal Software Architect');
+      assert.strictEqual(job.location, 'Oxford, UK');
+    });
+
+    test('GET /api/jobs/:id returns 404 for unknown ID', async () => {
+      const res = await request('/api/jobs/99999999-9999-9999-9999-999999999999');
+      assert.strictEqual(res.statusCode, 404);
+    });
+  });
+
+  /* =========================================================================
+   * WEEK 6: Applications, Direct/Nested Routing & 409 Conflict
+   * ========================================================================= */
+  describe('Week 6: Applications API, Nested Routing & 409 Conflict', () => {
+    const authorUserId = '22222222-2222-4222-a222-222222222222'; // Alan Turing
+    const candidateUserId = '44444444-4444-4444-a444-444444444444'; // Margaret Hamilton
+    let jobId;
+    let applicationId;
+
+    before(async () => {
+      // Create a test job posting for applications testing
+      const jobRes = await apiRequest('POST', `/api/users/${authorUserId}/jobs`, {
+        title: 'Apollo Systems Lead Engineer',
+        company: 'NASA / MIT Instrumentation Lab',
+        location: 'Cambridge, MA',
+        description: 'Flight computer software development.',
+      });
+      assert.strictEqual(jobRes.statusCode, 201);
+      jobId = jobRes.json().id;
+    });
+
+    test('POST /api/jobs/:id/applications creates an application successfully', async () => {
+      const res = await apiRequest('POST', `/api/jobs/${jobId}/applications`, {
+        userId: candidateUserId,
+        status: 'applied',
+      });
+
+      assert.strictEqual(res.statusCode, 201);
+      const app = res.json();
+      assert.strictEqual(app.userId, candidateUserId);
+      assert.strictEqual(app.jobPostingId, jobId);
+      assert.strictEqual(app.status, 'applied');
+      assert.ok(app.id);
+      applicationId = app.id;
+    });
+
+    test('POST /api/jobs/:id/applications returns 409 Conflict on duplicate application', async () => {
+      const res = await apiRequest('POST', `/api/jobs/${jobId}/applications`, {
+        userId: candidateUserId, // Same candidate for same job
+        status: 'applied',
+      });
+
+      assert.strictEqual(res.statusCode, 409);
+      const errorData = res.json();
+      assert.strictEqual(errorData.error, 'Conflict');
+      assert.strictEqual(errorData.message, 'User has already applied for this job posting');
+    });
+
+    test('POST /api/jobs/:id/applications returns 404 for non-existent candidate user', async () => {
+      const nonExistentId = '99999999-9999-9999-9999-999999999999';
+      const res = await apiRequest('POST', `/api/jobs/${jobId}/applications`, {
+        userId: nonExistentId,
+      });
+
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('POST /api/jobs/:id/applications returns 404 for non-existent job posting', async () => {
+      const nonExistentJobId = '99999999-9999-9999-9999-999999999999';
+      const res = await apiRequest('POST', `/api/jobs/${nonExistentJobId}/applications`, {
+        userId: candidateUserId,
+      });
+
+      assert.strictEqual(res.statusCode, 404);
+    });
+
+    test('GET /api/jobs/:id/applications lists all applications submitted for that job', async () => {
+      const res = await request(`/api/jobs/${jobId}/applications`);
+      assert.strictEqual(res.statusCode, 200);
+      const apps = res.json();
+      assert.ok(Array.isArray(apps));
+      assert.ok(apps.some((a) => a.id === applicationId && a.userId === candidateUserId));
+    });
+
+    test('GET /api/users/:id/applications lists all applications submitted by candidate', async () => {
+      const res = await request(`/api/users/${candidateUserId}/applications`);
+      assert.strictEqual(res.statusCode, 200);
+      const apps = res.json();
+      assert.ok(Array.isArray(apps));
+      assert.ok(apps.some((a) => a.id === applicationId && a.jobPostingId === jobId));
+    });
+
+    test('GET /api/applications returns all applications in the system', async () => {
+      const res = await request('/api/applications');
+      assert.strictEqual(res.statusCode, 200);
+      const apps = res.json();
+      assert.ok(Array.isArray(apps));
+      assert.ok(apps.some((a) => a.id === applicationId));
+    });
+
+    test('DELETE /api/jobs/:id cascades and deletes all associated applications', async () => {
+      // Delete the job posting
+      const delJobRes = await apiRequest('DELETE', `/api/jobs/${jobId}`);
+      assert.strictEqual(delJobRes.statusCode, 200);
+
+      // Verify job is gone
+      const checkJobRes = await request(`/api/jobs/${jobId}`);
+      assert.strictEqual(checkJobRes.statusCode, 404);
+
+      // Verify cascaded deletion of application
+      const checkAppRes = await request(`/api/applications/${applicationId}`);
+      assert.strictEqual(checkAppRes.statusCode, 404);
+    });
+
+    test('Seeded job postings from jobPostingFactory are linked to existing users', async () => {
+      const res = await request('/api/jobs');
+      assert.strictEqual(res.statusCode, 200);
+      const jobs = res.json();
+      assert.ok(Array.isArray(jobs));
+      // At least the 4 seed jobs from factory
+      assert.ok(jobs.length >= 4);
+
+      const turingJobsRes = await request(`/api/users/${authorUserId}/jobs`);
+      assert.strictEqual(turingJobsRes.statusCode, 200);
+      const turingJobs = turingJobsRes.json();
+      assert.ok(Array.isArray(turingJobs));
+      assert.ok(turingJobs.some((j) => j.company === 'Turing Quantum Systems'));
+    });
+
+    test('DELETE /api/users/:id cascades and deletes user job postings and applications', async () => {
+      // 1. Create a transient user
+      const tempUserRes = await apiRequest('POST', '/api/users', {
+        name: 'Cascade Test User',
+        email: 'cascade.test@alumni.edu',
+        role: 'alumni',
+      });
+      assert.strictEqual(tempUserRes.statusCode, 201);
+      const tempUserId = tempUserRes.json().id;
+
+      // 2. Post a job under this user
+      const tempJobRes = await apiRequest('POST', `/api/users/${tempUserId}/jobs`, {
+        title: 'Cascade Systems Engineer',
+        company: 'Cascade Corp',
+      });
+      assert.strictEqual(tempJobRes.statusCode, 201);
+      const tempJobId = tempJobRes.json().id;
+
+      // 3. Create an application for this job by candidateUserId
+      const tempAppRes = await apiRequest('POST', `/api/jobs/${tempJobId}/applications`, {
+        userId: candidateUserId,
+      });
+      assert.strictEqual(tempAppRes.statusCode, 201);
+      const tempAppId = tempAppRes.json().id;
+
+      // 4. Delete the author user
+      const delUserRes = await apiRequest('DELETE', `/api/users/${tempUserId}`);
+      assert.strictEqual(delUserRes.statusCode, 200);
+
+      // 5. Verify user is gone
+      const checkUser = await request(`/api/users/${tempUserId}`);
+      assert.strictEqual(checkUser.statusCode, 404);
+
+      // 6. Verify job posting was cascade deleted
+      const checkJob = await request(`/api/jobs/${tempJobId}`);
+      assert.strictEqual(checkJob.statusCode, 404);
+
+      // 7. Verify application was cascade deleted
+      const checkApp = await request(`/api/applications/${tempAppId}`);
+      assert.strictEqual(checkApp.statusCode, 404);
+    });
+  });
 });
+

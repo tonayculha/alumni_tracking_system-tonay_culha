@@ -1,5 +1,7 @@
 const express = require('express');
 const apiUserController = require('../controllers/apiUser.controller');
+const apiJobPostingController = require('../controllers/apiJobPosting.controller');
+const apiApplicationController = require('../controllers/apiApplication.controller');
 
 const router = express.Router();
 
@@ -213,4 +215,128 @@ router.put('/:id', apiUserController.updateUser);
 router.patch('/:id', apiUserController.patchUser);
 router.delete('/:id', apiUserController.deleteUser);
 
+/**
+ * @openapi
+ * /api/users/{id}/jobs:
+ *   get:
+ *     tags:
+ *       - Jobs API (REST)
+ *     summary: Retrieve all job postings authored by a specific user
+ *     description: Nested endpoint returning all job listings published by user :id.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Author user UUID
+ *     responses:
+ *       200:
+ *         description: List of jobs authored by user.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/JobPosting'
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *   post:
+ *     tags:
+ *       - Jobs API (REST)
+ *     summary: Create a job posting under a specific user
+ *     description: Nested endpoint for creating a job vacancy. Extracts user_id strictly from path parameter :id, ignoring any userId in request body.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Author user UUID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *               - company
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 example: Full Stack Engineer
+ *               company:
+ *                 type: string
+ *                 example: Stripe
+ *               location:
+ *                 type: string
+ *                 example: Remote / San Francisco
+ *               description:
+ *                 type: string
+ *                 example: Building modern payment infrastructures with Node.js and PostgreSQL.
+ *     responses:
+ *       201:
+ *         description: Job posting created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/JobPosting'
+ *       400:
+ *         description: Validation error or missing fields.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/:id/jobs', apiJobPostingController.getUserJobs);
+router.post('/:id/jobs', apiJobPostingController.createUserJob);
+
+/**
+ * @openapi
+ * /api/users/{id}/applications:
+ *   get:
+ *     tags:
+ *       - Applications API (REST)
+ *     summary: Retrieve all applications submitted by a specific user
+ *     description: Nested endpoint returning all applications submitted by candidate user :id.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Candidate user UUID
+ *     responses:
+ *       200:
+ *         description: List of applications submitted by the user.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Application'
+ *       404:
+ *         description: User not found.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/:id/applications', apiApplicationController.getUserApplications);
+
 module.exports = router;
+

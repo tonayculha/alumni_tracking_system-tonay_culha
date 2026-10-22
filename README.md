@@ -45,6 +45,7 @@ An enterprise-ready, clean-room implementation of the **Alumni Tracking System**
 4. **MVC Architecture & Dual Controller Routing (Week 4)**: Clear separation of concerns between user-facing browser views and machine-facing REST APIs. Implements an in-memory `UserModel` (`backend/src/models/user.model.js`), dual controllers (`ApiUserController` for pure JSON REST vs `UserController` for semantic HTML view rendering), and an interactive browser-based user management portal at `/users`.
 5. **Interactive OpenAPI 3.0 Documentation**: Fully interactive Swagger UI exposed at `/api/swagger` and `/api/docs` allowing instant endpoint discovery and browser testing.
 6. **Database Persistence & Migration Design (Week 5)**: Formally planned and documented in [ddd.md](./ddd.md). Establishes the relational schema, PostgreSQL 16 persistence with named volume `postgres_data`, container health probes, and migration strategy.
+7. **Relational Schema & Multi-Entity Associations (Week 6 - Phase 1)**: Fully documented in [ddd.md](./ddd.md). Implements One-to-Many (`users (1) ───< (N) job_postings`) and Many-to-Many (`users (N) >───< (M) job_postings` via `applications` join entity), `ON DELETE CASCADE` referential integrity, and `UNIQUE(user_id, job_posting_id)` business rule mapping to HTTP `409 Conflict`.
 
 ---
 
@@ -540,7 +541,13 @@ The comprehensive database architecture, schema definitions, constraints, index 
 * **Entity Specifications**:
   * **`users` Table**: UUID primary key (`gen_random_uuid()`), name, RFC-compliant unique email (`LOWER(email)` unique index), role (`admin`, `alumni`, `student`), and UTC audit timestamps (`created_at`, `updated_at`).
   * **`announcements` Table**: UUID primary key, headline title, long-form content (`TEXT`), category (`academic`, `career`, `social`), author/department string, priority (`low`, `normal`, `urgent`), and UTC audit timestamps.
+  * **`job_postings` Table (Week 6)**: UUID primary key, foreign key `user_id` referencing `users(id)` with `ON DELETE CASCADE` (1:N association), job title, company name, optional location, long-form description, and UTC audit timestamps.
+  * **`applications` Table (Week 6)**: UUID primary key, foreign key `user_id` referencing `users(id)` with `ON DELETE CASCADE`, foreign key `job_posting_id` referencing `job_postings(id)` with `ON DELETE CASCADE`, status enum (`applied`, `interview`, `accepted`, `rejected`), composite unique constraint `uq_user_job_application UNIQUE (user_id, job_posting_id)` enforcing single application per candidate per job and mapping to HTTP `409 Conflict`, and UTC audit timestamps.
+* **Association Topologies**:
+  * **One-to-Many (1:N)**: `users (1) ───< (N) job_postings`
+  * **Many-to-Many (N:M)**: `users (N) >───< (M) job_postings` mediated by `applications`
 * **Deterministic Bootstrapping**: Docker Compose coordinates backend startup using PostgreSQL health probes (`pg_isready`), ensuring zero connection dropouts during container orchestration.
+* **Sequential Transactional Migrations**: Handled by `backend/src/db/migrate.js` with `schema_migrations` tracking and automatic rollback safety.
 * **Bidirectional Documentation**: [ddd.md](./ddd.md) links directly back to this [README.md](./README.md).
 
 ---

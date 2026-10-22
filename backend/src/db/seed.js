@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { pool, query } = require('../config/db');
 const logger = require('../utils/logger');
+const { jobPostingFactory } = require('./factories/jobPostingFactory');
 
 /**
  * Seed Runner
@@ -24,6 +25,11 @@ const runSeeds = async () => {
     await query(sql);
     logger.info(`Seed applied successfully: ${file}`);
   }
+
+  // Seed job postings linked to registered users via jobPostingFactory
+  logger.info('Seeding job postings via jobPostingFactory...');
+  const seededJobs = await jobPostingFactory.seed();
+  logger.info(`Seeded ${seededJobs.length} job postings successfully.`);
 
   logger.info('All database seeds completed successfully.');
 };

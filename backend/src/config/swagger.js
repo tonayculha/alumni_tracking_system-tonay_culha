@@ -49,6 +49,14 @@ This API is developed following clean architecture, layered separation of concer
       name: 'Announcements View (MVC)',
       description: 'Semantic HTML5 MVC View layer & interactive announcements management portal (/announcements)',
     },
+    {
+      name: 'Jobs API (REST)',
+      description: 'RESTful JSON CRUD endpoints for Job Postings (/api/jobs, /api/users/:id/jobs)',
+    },
+    {
+      name: 'Applications API (REST)',
+      description: 'RESTful JSON CRUD endpoints for Applications (/api/applications, /api/jobs/:id/applications, /api/users/:id/applications)',
+    },
   ],
   components: {
     schemas: {
@@ -315,6 +323,171 @@ This API is developed following clean architecture, layered separation of concer
             type: 'array',
             items: { type: 'string' },
             example: ['Field "email" is required and must be a valid email address.'],
+          },
+        },
+      },
+      JobPosting: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            example: '55555555-5555-4555-a555-555555555555',
+          },
+          userId: {
+            type: 'string',
+            format: 'uuid',
+            example: '11111111-1111-4111-a111-111111111111',
+          },
+          title: {
+            type: 'string',
+            example: 'Senior Backend Engineer',
+          },
+          company: {
+            type: 'string',
+            example: 'Google DeepMind',
+          },
+          location: {
+            type: 'string',
+            example: 'London, UK / Hybrid',
+          },
+          description: {
+            type: 'string',
+            example: 'Designing scalable microservices with PostgreSQL and Node.js.',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-10-22T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-10-22T10:00:00.000Z',
+          },
+        },
+        required: ['id', 'userId', 'title', 'company', 'createdAt'],
+      },
+      CreateJobPostingInput: {
+        type: 'object',
+        required: ['title', 'company'],
+        properties: {
+          userId: {
+            type: 'string',
+            format: 'uuid',
+            example: '11111111-1111-4111-a111-111111111111',
+            description: 'Required for direct POST /api/jobs (ignored in nested /users/:id/jobs)',
+          },
+          title: {
+            type: 'string',
+            minLength: 2,
+            example: 'Senior Backend Engineer',
+          },
+          company: {
+            type: 'string',
+            minLength: 2,
+            example: 'Google DeepMind',
+          },
+          location: {
+            type: 'string',
+            example: 'London, UK / Hybrid',
+          },
+          description: {
+            type: 'string',
+            example: 'Designing scalable distributed systems.',
+          },
+        },
+      },
+      UpdateJobPostingInput: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            minLength: 2,
+            example: 'Staff Backend Engineer',
+          },
+          company: {
+            type: 'string',
+            minLength: 2,
+            example: 'Google DeepMind',
+          },
+          location: {
+            type: 'string',
+            example: 'London, UK / Remote',
+          },
+          description: {
+            type: 'string',
+            example: 'Lead backend architecture.',
+          },
+        },
+      },
+      Application: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+            example: '66666666-6666-4666-a666-666666666666',
+          },
+          userId: {
+            type: 'string',
+            format: 'uuid',
+            example: '44444444-4444-4444-a444-444444444444',
+          },
+          jobPostingId: {
+            type: 'string',
+            format: 'uuid',
+            example: '55555555-5555-4555-a555-555555555555',
+          },
+          status: {
+            type: 'string',
+            enum: ['applied', 'interview', 'accepted', 'rejected'],
+            example: 'applied',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-10-22T10:30:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-10-22T10:30:00.000Z',
+          },
+        },
+        required: ['id', 'userId', 'jobPostingId', 'status', 'createdAt'],
+      },
+      CreateApplicationInput: {
+        type: 'object',
+        required: ['userId', 'jobId'],
+        properties: {
+          userId: {
+            type: 'string',
+            format: 'uuid',
+            example: '44444444-4444-4444-a444-444444444444',
+          },
+          jobId: {
+            type: 'string',
+            format: 'uuid',
+            example: '55555555-5555-4555-a555-555555555555',
+          },
+          status: {
+            type: 'string',
+            enum: ['applied', 'interview', 'accepted', 'rejected'],
+            default: 'applied',
+          },
+        },
+      },
+      ConflictErrorResponse: {
+        type: 'object',
+        properties: {
+          error: {
+            type: 'string',
+            example: 'Conflict',
+          },
+          message: {
+            type: 'string',
+            example: 'User has already applied for this job posting',
           },
         },
       },

@@ -1,8 +1,8 @@
 # Data Design Document (DDD)
-## Alumni Tracking System — Database Integration, Persistence & Migration (Week 5)
+## Alumni Tracking System — Relational Schema, Multi-Entity Associations & Persistence (Weeks 5 & 6)
 
 > 🔗 **Bidirectional Documentation Link**:
-> This document specifies the persistent data tier and relational architecture for the system described in the main [README.md](./README.md).
+> This document specifies the persistent data tier, relational schemas, constraints, and index strategy for the system described in the main [README.md](./README.md).
 > To return to the main project overview, architecture diagrams, and API guides, see [README.md](./README.md).
 
 ---
@@ -14,11 +14,25 @@
 3. [Entity Schema Specifications](#3-entity-schema-specifications)
    - [3.1 Entity: `users`](#31-entity-users)
    - [3.2 Entity: `announcements`](#32-entity-announcements)
-4. [Data Types & Constraints Matrix](#4-data-types--constraints-matrix)
+   - [3.3 Entity: `job_postings` (Week 6 — One-to-Many)](#33-entity-job_postings-week-6--one-to-many)
+   - [3.4 Entity: `applications` (Week 6 — Many-to-Many Join Entity)](#34-entity-applications-week-6--many-to-many-join-entity)
+4. [Data Types, Constraints & Referential Integrity Matrix](#4-data-types-constraints--referential-integrity-matrix)
+   - [4.1 Global Design Conventions](#41-global-design-conventions)
+   - [4.2 Referential Integrity & Cascade Rules (ON DELETE CASCADE)](#42-referential-integrity--cascade-rules-on-delete-cascade)
+   - [4.3 Duplicate Application Prevention & 409 Conflict Rule](#43-duplicate-application-prevention--409-conflict-rule)
 5. [Indexing Strategy & Performance Analysis](#5-indexing-strategy--performance-analysis)
-6. [Relational Rationale & Architectural Evolution](#6-relational-rationale--architectural-evolution)
+   - [5.1 `users` Table Indexes](#51-users-table-indexes)
+   - [5.2 `announcements` Table Indexes](#52-announcements-table-indexes)
+   - [5.3 `job_postings` Table Indexes](#53-job_postings-table-indexes)
+   - [5.4 `applications` Table Indexes](#54-applications-table-indexes)
+6. [Relational Associations & Architectural Rationale](#6-relational-associations--architectural-rationale)
+   - [6.1 One-to-Many (1:N) Association: `users` ───< `job_postings`](#61-one-to-many-1n-association-users----job_postings)
+   - [6.2 Many-to-Many (N:M) Association: `users` >───< `job_postings` via `applications`](#62-many-to-many-nm-association-users----job_postings-via-applications)
+   - [6.3 Standalone `announcements.author` Design](#63-standalone-announcementsauthor-design)
 7. [Entity-Relationship (ER) Diagram](#7-entity-relationship-er-diagram)
-8. [PostgreSQL DDL Reference Script](#8-postgresql-ddl-reference-script)
+8. [PostgreSQL DDL Reference Scripts](#8-postgresql-ddl-reference-scripts)
+   - [8.1 Migration 001: Initial Schema (`001_initial_schema.sql`)](#81-migration-001-initial-schema-001_initial_schemasql)
+   - [8.2 Migration 002: Jobs & Applications (`002_jobs_and_applications.sql`)](#82-migration-002-jobs--applications-002_jobs_and_applicationssql)
 9. [Environment Configuration & Secrets Strategy](#9-environment-configuration--secrets-strategy)
 10. [Migration & Seed Strategy](#10-migration--seed-strategy)
 11. [Navigation](#11-navigation)
@@ -27,9 +41,15 @@
 
 ## 1. Executive Summary & Purpose
 
-In Weeks 3 and 4, the **Alumni Tracking System** operated using an in-memory repository architecture with thread-safe defensive deep cloning to satisfy strict milestone isolation.
+In Weeks 3 and 4, the **Alumni Tracking System** operated using an in-memory repository architecture with thread-safe defensive deep cloning to satisfy strict instructor isolation milestones.
 
-**Week 5 Milestone ("Database Integration, Persistence & Migration")** formalizes the migration from ephemeral in-memory storage to an enterprise-grade **PostgreSQL 16** relational database engine. This Data Design Document (DDD) establishes the formal database contract, relational schemas, constraint rules, index strategy, and persistence topology required to achieve durable ACID compliance while preserving backward compatibility with existing REST endpoints and MVC views.
+**Week 5 Milestone ("Database Integration, Persistence & Migration")** formalized the transition to an enterprise-grade **PostgreSQL 16** relational database engine with containerized orchestration and named volumes.
+
+**Week 6 Milestone ("Relational Schema, One-to-Many & Many-to-Many Associations, and Nested Routing")** expands the data architecture to support complex multi-entity domain relationships:
+1. **One-to-Many (1:N)**: A registered user (alumni, recruiter, or admin) can author and publish multiple career opportunities (`users (1) ───< (N) job_postings`).
+2. **Many-to-Many (N:M)**: Registered users (candidates/students) can submit job applications to multiple job postings, and each job posting receives applications from multiple candidates (`users (N) >───< (M) job_postings` mediated by the `applications` join entity).
+3. **Referential Integrity & Strict Cascade Deletions**: Deleting a user automatically cascades to their authored job postings and submitted applications; deleting a job posting cascades to its associated applications.
+4. **Duplicate Prevention (Business Rule Enforcement)**: Enforces table-level uniqueness `CONSTRAINT uq_user_job_application UNIQUE (user_id, job_posting_id)` to guarantee that candidates can apply to a specific vacancy at most once, backing the application layer's `409 Conflict` response.
 
 ---
 
@@ -101,12 +121,12 @@ The `users` entity models registered alumni, students, and administrators within
 
 | Column Name | PostgreSQL Type | Nullable | Default | Constraints & Checks | Rationale |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `id` | `UUID` | **NOT NULL** | `gen_random_uuid()` | `PRIMARY KEY` | Globally unique 128-bit RFC 4122 identifier. Mitigates sequential ID enumeration attacks, facilitates distributed generation, and decouples identity from storage order. |
-| `name` | `VARCHAR(100)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(name)) >= 2)` | Enforces human-readable names with a reasonable upper boundary (100 characters) and minimum length of 2 characters. |
-| `email` | `VARCHAR(255)` | **NOT NULL** | *None* | `UNIQUE`, `CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')` | RFC 5321 compliant email address. Enforces table-level uniqueness to prevent duplicate registrations and canonical identity collisions. |
-| `role` | `VARCHAR(20)` | **NOT NULL** | `'student'` | `CHECK (role IN ('admin', 'alumni', 'student'))` | Role-Based Access Control (RBAC) discriminator. Constrained to enumerated valid roles to maintain domain integrity. |
-| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Immutable on update* | UTC timestamp recording record creation instant. Timezone-aware (`TIMESTAMPTZ`) ensures correct internationalization across distributed clients. |
-| `updated_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Updated via trigger* | UTC timestamp capturing the latest mutation. Maintained automatically by a PostgreSQL trigger. |
+| `id` | `UUID` | **NOT NULL** | `gen_random_uuid()` | `PRIMARY KEY` | Globally unique 128-bit RFC 4122 identifier. Mitigates enumeration attacks and decouples identity from storage order. |
+| `name` | `VARCHAR(100)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(name)) >= 2)` | Enforces human-readable names with a reasonable upper boundary (100 chars) and minimum 2 chars. |
+| `email` | `VARCHAR(255)` | **NOT NULL** | *None* | `UNIQUE`, RFC email regex | RFC 5321 compliant email address. Unique index prevents duplicate accounts. |
+| `role` | `VARCHAR(20)` | **NOT NULL** | `'student'` | `CHECK (role IN ('admin', 'alumni', 'student'))` | Role-Based Access Control (RBAC) discriminator. Constrained to enumerated valid roles. |
+| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Immutable on update* | UTC timestamp recording record creation instant. |
+| `updated_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Updated via trigger* | UTC timestamp capturing the latest record mutation. |
 
 ---
 
@@ -123,30 +143,122 @@ The `announcements` entity models institution-wide bulletins, career fairs, acad
 | Column Name | PostgreSQL Type | Nullable | Default | Constraints & Checks | Rationale |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `id` | `UUID` | **NOT NULL** | `gen_random_uuid()` | `PRIMARY KEY` | 128-bit UUID primary key ensuring collision-free identification across distributed environments. |
-| `title` | `VARCHAR(255)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(title)) >= 3)` | Headline of the bulletin. 255 characters accommodate descriptive headlines for cards, banners, and RSS headlines. |
-| `content` | `TEXT` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(content)) > 0)` | Unbounded long-form textual body accommodating multi-paragraph announcements, rich markdown, or agenda descriptions. |
-| `category` | `VARCHAR(50)` | **NOT NULL** | *None* | `CHECK (category IN ('academic', 'career', 'social'))` | Categorical discriminator supporting UI tab filters, subscription channels, and targeted bulletin feeds. |
-| `author` | `VARCHAR(100)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(author)) >= 2)` | Author or issuing institutional entity (e.g. "Career Development Center", "Alumni Relations Office", or user name). |
-| `priority` | `VARCHAR(20)` | **NOT NULL** | `'normal'` | `CHECK (priority IN ('low', 'normal', 'urgent'))` | Urgency classification. Drives UI badge colorization (e.g., red for urgent, blue for normal) and notification sorting. |
-| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Immutable on update* | Timezone-aware UTC timestamp used for reverse-chronological feed sorting (`ORDER BY created_at DESC`). |
+| `title` | `VARCHAR(255)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(title)) >= 3)` | Headline of the bulletin. 255 characters accommodate descriptive headlines. |
+| `content` | `TEXT` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(content)) > 0)` | Unbounded long-form textual body accommodating multi-paragraph announcements or rich markdown. |
+| `category` | `VARCHAR(50)` | **NOT NULL** | *None* | `CHECK (category IN ('academic', 'career', 'social'))` | Categorical discriminator supporting UI tab filters and notification channels. |
+| `author` | `VARCHAR(100)` | **NOT NULL** | *None* | `CHECK (LENGTH(TRIM(author)) >= 2)` | Author or issuing institutional entity (e.g. "Career Development Center", "Alumni Relations Office"). |
+| `priority` | `VARCHAR(20)` | **NOT NULL** | `'normal'` | `CHECK (priority IN ('low', 'normal', 'urgent'))` | Urgency classification for badge colorization and sorting. |
+| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Immutable on update* | Timezone-aware UTC timestamp used for reverse-chronological feed sorting. |
 | `updated_at` | `TIMESTAMPTZ` | **NOT NULL** | `CURRENT_TIMESTAMP` | *Updated via trigger* | Timezone-aware UTC timestamp recording the latest edit time. |
 
 ---
 
-## 4. Data Types & Constraints Matrix
+### 3.3 Entity: `job_postings` (Week 6 — One-to-Many)
+
+The `job_postings` entity models professional vacancies, employment listings, and internship opportunities posted by registered users (alumni, recruiters, administrators).
+
+#### Table Definition
+* **Table Name**: `job_postings`
+* **Primary Key**: `id` (`UUID`)
+* **Foreign Key**: `user_id` (`UUID`) REFERENCES `users(id)` ON DELETE CASCADE
+
+#### Column Specifications
+
+| Column Name | PostgreSQL Type | Nullable | Default | Constraints & Checks | Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **NOT NULL** | `gen_random_uuid()` | `PRIMARY KEY` | Globally unique 128-bit RFC 4122 identifier. |
+| `user_id` | `UUID` | **NOT NULL** | *None* | `REFERENCES users(id) ON DELETE CASCADE` | Identifies the authoring user who published the vacancy. Cascade deletion automatically removes postings when user account is deleted. |
+| `title` | `VARCHAR(255)` | **NOT NULL** | *None* | *Required string* | Position title (e.g. "Senior Backend Engineer", "Data Analyst Intern"). |
+| `company` | `VARCHAR(255)` | **NOT NULL** | *None* | *Required string* | Hiring company, organization, or startup name. |
+| `location` | `VARCHAR(255)` | **NULL** | *None* | *Optional string* | Physical office location or work arrangement (e.g. "San Francisco, CA", "Hybrid", "Remote"). |
+| `description` | `TEXT` | **NULL** | *None* | *Optional long-form* | Comprehensive job description, qualifications, compensation range, and responsibilities. |
+| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `NOW()` | *Immutable on update* | UTC timestamp used for chronological job feed sorting (`ORDER BY created_at DESC`). |
+| `updated_at` | `TIMESTAMPTZ` | **NOT NULL** | `NOW()` | *Updated via trigger* | UTC timestamp capturing the latest vacancy description update. |
+
+---
+
+### 3.4 Entity: `applications` (Week 6 — Many-to-Many Join Entity)
+
+The `applications` entity represents the relational join junction between `users` (candidates/applicants) and `job_postings`. It maintains application lifecycle states and guarantees duplicate application prevention.
+
+#### Table Definition
+* **Table Name**: `applications`
+* **Primary Key**: `id` (`UUID`)
+* **Foreign Keys**:
+  * `user_id` (`UUID`) REFERENCES `users(id)` ON DELETE CASCADE
+  * `job_posting_id` (`UUID`) REFERENCES `job_postings(id)` ON DELETE CASCADE
+* **Composite Unique Constraint**: `CONSTRAINT uq_user_job_application UNIQUE (user_id, job_posting_id)`
+
+#### Column Specifications
+
+| Column Name | PostgreSQL Type | Nullable | Default | Constraints & Checks | Rationale |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `id` | `UUID` | **NOT NULL** | `gen_random_uuid()` | `PRIMARY KEY` | Independent UUID for each distinct application submission. |
+| `user_id` | `UUID` | **NOT NULL** | *None* | `REFERENCES users(id) ON DELETE CASCADE` | The candidate submitting the application. Deletion of applicant cascades and cleans up submitted applications. |
+| `job_posting_id` | `UUID` | **NOT NULL** | *None* | `REFERENCES job_postings(id) ON DELETE CASCADE` | The target vacancy. Deletion of the job posting cascades and removes all related applications. |
+| `status` | `VARCHAR(50)` | **NOT NULL** | `'applied'` | `CHECK (status IN ('applied', 'interview', 'accepted', 'rejected'))` | Controlled application workflow state discriminator. Defaults to `'applied'`. |
+| `created_at` | `TIMESTAMPTZ` | **NOT NULL** | `NOW()` | *Immutable on update* | UTC timestamp recording application submission moment. |
+| `updated_at` | `TIMESTAMPTZ` | **NOT NULL** | `NOW()` | *Updated via trigger* | UTC timestamp recording status transitions (e.g., moved to `'interview'`). |
+
+---
+
+## 4. Data Types, Constraints & Referential Integrity Matrix
 
 ### 4.1 Global Design Conventions
 
-1. **UUID Identifier Standard**: All primary keys utilize native PostgreSQL `UUID` generated by `gen_random_uuid()` (via `pgcrypto` or native PostgreSQL 13+).
-2. **Explicit Timezone Representation**: Timestamps use `TIMESTAMPTZ` (`TIMESTAMP WITH TIME ZONE`). Storage is normalized internally to UTC; client applications format values according to their local timezone.
-3. **Defense-in-Depth Constraints**: Data integrity is enforced at the database level (`NOT NULL`, `CHECK`, `UNIQUE`) in addition to application-level validation layers (`user.service.js`, `announcement.service.js`).
-4. **String Trimming & Length Bounds**: Uncontrolled string inflation is prevented by bounding VARCHAR sizes (`VARCHAR(100)`, `VARCHAR(255)`), while `TEXT` is reserved for large document bodies (`announcements.content`).
+1. **UUID Identifier Standard**: All primary keys utilize native PostgreSQL `UUID` generated by `gen_random_uuid()`.
+2. **Explicit Timezone Representation**: Timestamps use `TIMESTAMPTZ` (`TIMESTAMP WITH TIME ZONE`), internally normalized to UTC.
+3. **Defense-in-Depth Constraints**: Data integrity is enforced at the database level (`NOT NULL`, `CHECK`, `UNIQUE`, `FOREIGN KEY ... ON DELETE CASCADE`).
+4. **Automated Mutation Tracking**: PostgreSQL trigger `update_updated_at_column()` automatically sets `updated_at = NOW()` on every `UPDATE` operation across `job_postings` and `applications`.
+
+### 4.2 Referential Integrity & Cascade Rules (`ON DELETE CASCADE`)
+
+```
+  ┌─────────────────────────────────────────────────────────┐
+  │                          USERS                          │
+  └─────────────┬─────────────────────────────┬─────────────┘
+                │                             │
+       ON DELETE CASCADE             ON DELETE CASCADE
+                │                             │
+                ▼                             ▼
+  ┌───────────────────────────┐ ┌───────────────────────────┐
+  │       JOB_POSTINGS        │ │       APPLICATIONS        │
+  └─────────────┬─────────────┘ └─────────────▲─────────────┘
+                │                             │
+                └────── ON DELETE CASCADE ────┘
+```
+
+1. **User Deletion Cascades to Job Postings**:
+   - `job_postings.user_id REFERENCES users(id) ON DELETE CASCADE`
+   - *Rationale*: If an author or recruiter account is purged from the platform, their published vacancies are automatically deleted, preventing phantom postings with missing author references.
+2. **User Deletion Cascades to Applications**:
+   - `applications.user_id REFERENCES users(id) ON DELETE CASCADE`
+   - *Rationale*: If a candidate user account is deleted (e.g. GDPR right-to-erasure), all of their submitted job applications are automatically cleaned up.
+3. **Job Posting Deletion Cascades to Applications**:
+   - `applications.job_posting_id REFERENCES job_postings(id) ON DELETE CASCADE`
+   - *Rationale*: If an employer closes and deletes a job posting, all applications filed against that vacancy are purged, eliminating orphan join records.
+
+### 4.3 Duplicate Application Prevention & 409 Conflict Rule
+
+* **Table Constraint**:
+  ```sql
+  CONSTRAINT uq_user_job_application UNIQUE (user_id, job_posting_id)
+  ```
+* **Database Invariant**: A specific user can apply to a given job posting at most once.
+* **HTTP 409 Conflict Business Rule**:
+  - When an application submission (`POST /api/jobs/:id/applications` or `POST /api/users/:userId/applications`) attempts to insert an existing `(user_id, job_posting_id)` pair, PostgreSQL throws error code `23505 (unique_violation)`.
+  - The application service and controller layer traps this error code and returns an HTTP `409 Conflict` status code:
+    ```json
+    {
+      "status": "error",
+      "statusCode": 409,
+      "message": "User has already applied to this job posting"
+    }
+    ```
 
 ---
 
 ## 5. Indexing Strategy & Performance Analysis
-
-To guarantee scalable sub-millisecond query performance as datasets grow, the following B-Tree indexes are defined:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -161,64 +273,80 @@ To guarantee scalable sub-millisecond query performance as datasets grow, the fo
 │ announcements            │ idx_announcements_cr  │ (created_at DESC)   │
 │ announcements            │ idx_announcements_cat │ (category, created) │
 │ announcements            │ idx_announcements_pri │ (priority)          │
+│ job_postings             │ job_postings_pkey     │ (id) UNIQUE         │
+│ job_postings             │ idx_jobs_user_id      │ (user_id)           │
+│ job_postings             │ idx_jobs_created_at_d │ (created_at DESC)   │
+│ applications             │ applications_pkey     │ (id) UNIQUE         │
+│ applications             │ uq_user_job_applicat. │ (user_id, job_id) UN│
+│ applications             │ idx_applications_user │ (user_id)           │
+│ applications             │ idx_applications_job  │ (job_posting_id)    │
+│ applications             │ idx_applications_stat │ (status)            │
 └──────────────────────────┴───────────────────────┴─────────────────────┘
 ```
 
 ### 5.1 `users` Table Indexes
-
-1. **`users_pkey` (Primary Key Index)**:
-   * **Target**: `id`
-   * **Structure**: Unique B-Tree
-   * **Query Profile**: `GET /api/users/:id`, `PUT /api/users/:id`, `DELETE /api/users/:id`. Provides $O(\log N)$ single-record retrieval.
-2. **`idx_users_email_lower` (Case-Insensitive Unique Index)**:
-   * **Target**: `LOWER(email)`
-   * **Structure**: Unique Functional B-Tree
-   * **Query Profile**: `POST /api/users` conflict checks and authentication lookups (`WHERE LOWER(email) = LOWER($1)`). Guarantees that `user@alumni.edu` and `User@Alumni.edu` cannot co-exist.
-3. **`idx_users_role` (Role Filter Index)**:
-   * **Target**: `role`
-   * **Structure**: B-Tree
-   * **Query Profile**: `GET /api/users?role=alumni` or filtering by `admin`/`student` in directory views.
+1. **`users_pkey`**: Primary key index on `id`. Fast $O(\log N)$ single-record retrieval.
+2. **`idx_users_email_lower`**: Unique functional index on `LOWER(TRIM(email))`. Prevents duplicate email accounts regardless of casing.
+3. **`idx_users_role`**: B-Tree index on `role` for directory filtering (`WHERE role = 'alumni'`).
 
 ### 5.2 `announcements` Table Indexes
+1. **`announcements_pkey`**: Primary key index on `id`.
+2. **`idx_announcements_created_at_desc`**: Reverse chronological index on `created_at DESC` for bulletin board feeds.
+3. **`idx_announcements_category_created_at`**: Composite index on `(category, created_at DESC)`.
+4. **`idx_announcements_priority`**: Filter index on `priority`.
 
-1. **`announcements_pkey` (Primary Key Index)**:
-   * **Target**: `id`
-   * **Structure**: Unique B-Tree
-   * **Query Profile**: Direct single-bulletin lookups, edits, and deletions (`GET /api/announcements/:id`).
-2. **`idx_announcements_created_at_desc` (Chronological Feed Index)**:
-   * **Target**: `created_at DESC`
-   * **Structure**: B-Tree (Descending order)
-   * **Query Profile**: Home page bulletin feeds, RSS feeds, and paginated lists (`SELECT * FROM announcements ORDER BY created_at DESC LIMIT 20`). Eliminates runtime sorting overhead (`Sort` node in `EXPLAIN ANALYZE`).
-3. **`idx_announcements_category_created_at` (Composite Filter-Sort Index)**:
-   * **Target**: `(category, created_at DESC)`
-   * **Structure**: Composite B-Tree
-   * **Query Profile**: Category-filtered feeds (`WHERE category = 'career' ORDER BY created_at DESC`). Serves filtered and pre-sorted results directly from the index tree.
-4. **`idx_announcements_priority` (Priority Filter Index)**:
-   * **Target**: `priority`
-   * **Structure**: B-Tree
-   * **Query Profile**: Alert banner retrieval (`WHERE priority = 'urgent'`).
+### 5.3 `job_postings` Table Indexes
+1. **`job_postings_pkey`**: Primary key index on `id`.
+2. **`idx_jobs_user_id`**: Foreign key index on `job_postings(user_id)`.
+   - *Query Profile*: Essential for nested routing queries such as `GET /api/users/:userId/jobs` (finding all vacancies posted by a specific user) and fast foreign key constraint validation during user deletion.
+3. **`idx_jobs_created_at_desc`**: Descending B-Tree index on `job_postings(created_at DESC)`.
+   - *Query Profile*: Powers the public job board feed (`SELECT * FROM job_postings ORDER BY created_at DESC LIMIT 20`), avoiding expensive runtime sorting.
+
+### 5.4 `applications` Table Indexes
+1. **`applications_pkey`**: Primary key index on `id`.
+2. **`uq_user_job_application`**: Automatically backed by a unique B-Tree index on `(user_id, job_posting_id)` for duplicate check acceleration.
+3. **`idx_applications_user_id`**: Foreign key index on `applications(user_id)`.
+   - *Query Profile*: Powers candidate portal queries `GET /api/users/:userId/applications` (retrieving all applications submitted by a user).
+4. **`idx_applications_job_id`**: Foreign key index on `applications(job_posting_id)`.
+   - *Query Profile*: Vital for employer view queries `GET /api/jobs/:jobId/applications` (listing all candidates who applied for a specific job). Because the composite unique index has `user_id` as its leading column, queries filtering solely on `job_posting_id` require this dedicated index for sub-millisecond execution.
+5. **`idx_applications_status`**: Filter index on `applications(status)`.
+   - *Query Profile*: Enables efficient dashboard filtering by application lifecycle status (`WHERE status = 'interview'`).
 
 ---
 
-## 6. Relational Rationale & Architectural Evolution
+## 6. Relational Associations & Architectural Rationale
 
-### 6.1 Current Phase Design: Standalone `author VARCHAR(100)`
+### 6.1 One-to-Many (1:N) Association: `users` ───< `job_postings`
 
-In the current schema, `announcements.author` is stored as a `VARCHAR(100)` string rather than a rigid foreign key to `users.id`. This deliberate design decision provides:
+* **Cardinality**: One user can author zero, one, or many job postings. Each job posting belongs to exactly one authoring user.
+* **Foreign Key**: `job_postings.user_id REFERENCES users(id) ON DELETE CASCADE`.
+* **API Routing Blueprint**:
+  - `GET /api/users/:userId/jobs`: Lists all vacancies published by user `:userId`.
+  - `POST /api/users/:userId/jobs`: Creates a new job posting authored by user `:userId`.
+  - `GET /api/jobs`: Public job catalog with optional filtering.
+  - `GET /api/jobs/:id`: Detailed view of an individual job posting.
 
-1. **Institutional Authorship**: High-priority announcements are frequently published on behalf of departments or administrative entities (e.g. *"Alumni Relations Office"*, *"Career Development Center"*, *"Office of the Dean"*) rather than a single individual.
-2. **Loose Coupling & Separation of Concerns**: Announcements can exist independently of individual user accounts, avoiding dummy "department user" records with synthetic emails.
-3. **Contract Compatibility**: Maintains complete compatibility with the Week 4 in-memory announcement contract (`AnnouncementModel` seed data: `'Alumni Relations Office'`, `'Career Development Center'`, `'School of Computing & Engineering'`).
+### 6.2 Many-to-Many (N:M) Association: `users` >───< `job_postings` via `applications`
 
-### 6.2 Future Relational Evolution (Phase 2+ Hybrid Model)
+* **Cardinality**: Many candidates (`users`) can apply to many vacancies (`job_postings`).
+* **Relational Representation**: Mediated through the `applications` join entity.
+  - `users (1) ───< (N) applications`
+  - `job_postings (1) ───< (N) applications`
+* **Lifecycle State Machine**:
+  ```
+  [ applied ] ───> [ interview ] ───> [ accepted ]
+                         │
+                         └───> [ rejected ]
+  ```
+* **API Routing Blueprint**:
+  - `POST /api/jobs/:jobId/applications`: Submits an application for job `:jobId` (with candidate `user_id` in request body).
+  - `GET /api/jobs/:jobId/applications`: Retrieves all applicant records for job `:jobId` (for recruiters/authors).
+  - `GET /api/users/:userId/applications`: Retrieves all applications filed by candidate `:userId`.
+  - `PATCH /api/applications/:id/status`: Updates application state (`applied`, `interview`, `accepted`, `rejected`).
 
-As the platform evolves toward authenticated sessions and multi-tenant editorial workflows, the schema provides a non-breaking evolutionary path:
+### 6.3 Standalone `announcements.author` Design
 
-* **Optional Foreign Key**: Add an `author_id UUID NULL REFERENCES users(id) ON DELETE SET NULL`.
-* **Hybrid Fallback**:
-  * If published by a logged-in user: `author_id` references the user's UUID, while `author` holds their display name snapshot.
-  * If published by an institution or department: `author_id` is `NULL`, and `author` stores the department title.
-* **Audit Protection**: If an author user account is deleted, `ON DELETE SET NULL` preserves the historical announcement while clearing the foreign key link.
+In contrast to `job_postings` (which strictly ties to `users.id` for personal ownership), `announcements.author` remains a `VARCHAR(100)` string. This preserves institutional announcements authored by departments ("Alumni Relations Office", "School of Computing") that do not have dedicated user login accounts.
 
 ---
 
@@ -226,11 +354,36 @@ As the platform evolves toward authenticated sessions and multi-tenant editorial
 
 ```mermaid
 erDiagram
+    USERS ||--o{ JOB_POSTINGS : "creates / authors (1:N)"
+    USERS ||--o{ APPLICATIONS : "submits (1:N)"
+    JOB_POSTINGS ||--o{ APPLICATIONS : "receives (1:N)"
+    USERS ||..o{ ANNOUNCEMENTS : "conceptual authorship (future author_id FK)"
+
     USERS {
         uuid id PK "gen_random_uuid()"
         varchar_100 name "NOT NULL, min length 2"
         varchar_255 email UK "NOT NULL, UNIQUE (case-insensitive)"
         varchar_20 role "CHECK: admin | alumni | student"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+        timestamptz updated_at "NOT NULL, DEFAULT now()"
+    }
+
+    JOB_POSTINGS {
+        uuid id PK "gen_random_uuid()"
+        uuid user_id FK "NOT NULL, REFERENCES users(id) ON DELETE CASCADE"
+        varchar_255 title "NOT NULL, job title"
+        varchar_255 company "NOT NULL, hiring company"
+        varchar_255 location "Job location / Remote"
+        text description "Full job description & requirements"
+        timestamptz created_at "NOT NULL, DEFAULT now()"
+        timestamptz updated_at "NOT NULL, DEFAULT now()"
+    }
+
+    APPLICATIONS {
+        uuid id PK "gen_random_uuid()"
+        uuid user_id FK "NOT NULL, REFERENCES users(id) ON DELETE CASCADE"
+        uuid job_posting_id FK "NOT NULL, REFERENCES job_postings(id) ON DELETE CASCADE"
+        varchar_50 status "CHECK: applied | interview | accepted | rejected"
         timestamptz created_at "NOT NULL, DEFAULT now()"
         timestamptz updated_at "NOT NULL, DEFAULT now()"
     }
@@ -245,106 +398,100 @@ erDiagram
         timestamptz created_at "NOT NULL, DEFAULT now()"
         timestamptz updated_at "NOT NULL, DEFAULT now()"
     }
-
-    USERS ||..o{ ANNOUNCEMENTS : "conceptual authorship / future author_id FK"
 ```
 
 ---
 
-## 8. PostgreSQL DDL Reference Script
+## 8. PostgreSQL DDL Reference Scripts
 
-The complete Data Definition Language (DDL) migration script for creating the schemas, constraints, automated timestamp triggers, and indexes:
+### 8.1 Migration 001: Initial Schema (`001_initial_schema.sql`)
 
 ```sql
--- =============================================================================
--- Alumni Tracking System: Week 5 Database Schema Migration
--- Target Engine: PostgreSQL 16
--- Database: alumni_db
--- =============================================================================
-
--- Ensure cryptographic extension is available for UUID generation
+-- Migration 001: Initial Schema (users & announcements)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- -----------------------------------------------------------------------------
--- Automated updated_at Trigger Function
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- -----------------------------------------------------------------------------
--- Table: users
--- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'student',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    -- Data Constraints
-    CONSTRAINT chk_users_name_length CHECK (LENGTH(TRIM(name)) >= 2),
-    CONSTRAINT chk_users_role CHECK (role IN ('admin', 'alumni', 'student')),
-    CONSTRAINT chk_users_email_format CHECK (
-        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
-    )
+    email VARCHAR(255) NOT NULL UNIQUE,
+    role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Case-Insensitive Unique Index on users.email
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(TRIM(email)));
-
--- Filter index for role-based queries
 CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
 
--- Attach automated updated_at trigger
-DROP TRIGGER IF EXISTS trigger_users_updated_at ON users;
-CREATE TRIGGER trigger_users_updated_at
-    BEFORE UPDATE ON users
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- -----------------------------------------------------------------------------
--- Table: announcements
--- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS announcements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     category VARCHAR(50) NOT NULL,
     author VARCHAR(100) NOT NULL,
-    priority VARCHAR(20) NOT NULL DEFAULT 'normal',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    -- Data Constraints
-    CONSTRAINT chk_announcements_title_length CHECK (LENGTH(TRIM(title)) >= 3),
-    CONSTRAINT chk_announcements_content_length CHECK (LENGTH(TRIM(content)) > 0),
-    CONSTRAINT chk_announcements_author_length CHECK (LENGTH(TRIM(author)) >= 2),
-    CONSTRAINT chk_announcements_category CHECK (category IN ('academic', 'career', 'social')),
-    CONSTRAINT chk_announcements_priority CHECK (priority IN ('low', 'normal', 'urgent'))
+    priority VARCHAR(20) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Chronological Feed Index (Descending)
-CREATE INDEX IF NOT EXISTS idx_announcements_created_at_desc 
-    ON announcements (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_created_at_desc ON announcements (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_category_created_at ON announcements (category, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_announcements_priority ON announcements (priority);
+```
 
--- Composite Category + Chronological Index
-CREATE INDEX IF NOT EXISTS idx_announcements_category_created_at 
-    ON announcements (category, created_at DESC);
+### 8.2 Migration 002: Jobs & Applications (`002_jobs_and_applications.sql`)
 
--- Priority Filter Index
-CREATE INDEX IF NOT EXISTS idx_announcements_priority 
-    ON announcements (priority);
+```sql
+-- Migration 002: Jobs & Applications (Week 6)
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Attach automated updated_at trigger
-DROP TRIGGER IF EXISTS trigger_announcements_updated_at ON announcements;
-CREATE TRIGGER trigger_announcements_updated_at
-    BEFORE UPDATE ON announcements
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 1:N Association: User -> Job Postings
+CREATE TABLE IF NOT EXISTS job_postings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    company VARCHAR(255) NOT NULL,
+    location VARCHAR(255),
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- N:M Join Entity: Users <-> Job Postings via Applications
+CREATE TABLE IF NOT EXISTS applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_posting_id UUID NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+    status VARCHAR(50) DEFAULT 'applied' CHECK (status IN ('applied', 'interview', 'accepted', 'rejected')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_user_job_application UNIQUE (user_id, job_posting_id)
+);
+
+-- Indexes for FKs, filtering, and feed sorting
+CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON job_postings (user_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_created_at_desc ON job_postings (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_applications_user_id ON applications (user_id);
+CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications (job_posting_id);
+CREATE INDEX IF NOT EXISTS idx_applications_status ON applications (status);
+
+-- Automated updated_at Triggers
+DROP TRIGGER IF EXISTS trigger_job_postings_updated_at ON job_postings;
+CREATE TRIGGER trigger_job_postings_updated_at
+    BEFORE UPDATE ON job_postings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_applications_updated_at ON applications;
+CREATE TRIGGER trigger_applications_updated_at
+    BEFORE UPDATE ON applications
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 ```
@@ -355,45 +502,38 @@ CREATE TRIGGER trigger_announcements_updated_at
 
 ### 9.1 Environment Variables Matrix
 
-The database connection parameters are passed to both the containerized database and backend service through environment variables:
-
 | Variable | Target Value | Container Context | Description |
 | :--- | :--- | :--- | :--- |
-| `DB_HOST` | `alumni_postgres` | `backend` | Docker internal DNS resolver host for PostgreSQL container |
+| `DB_HOST` | `alumni_postgres` (or `127.0.0.1` locally) | `backend` | PostgreSQL database hostname |
 | `DB_PORT` | `5432` | `backend` & `alumni_postgres` | Standard PostgreSQL port |
 | `DB_NAME` | `alumni_db` | `backend` & `alumni_postgres` | Target database catalog name |
-| `DB_USER` | `alumni_user` | `backend` & `alumni_postgres` | Database administrator/application user |
-| `DB_PASSWORD` | `alumni_secure_password` | `backend` & `alumni_postgres` | High-entropy password for authentication |
-
-### 9.2 Secrets Management & Version Control Defense
-
-* **`.gitignore` Enforcement**: `.env` is explicitly declared in `.gitignore` to prevent database credentials and secret tokens from ever leaking to public Git repositories.
-* **`.env.example` Synchronization**: `.env.example` is maintained under version control as a template reference, allowing any developer to initialize their environment deterministically (`cp .env.example .env`).
+| `DB_USER` | `alumni_user` | `backend` & `alumni_postgres` | Application database user |
+| `DB_PASSWORD` | `alumni_secure_password` | `backend` & `alumni_postgres` | High-entropy authentication password |
 
 ---
 
 ## 10. Migration & Seed Strategy
 
-### 10.1 Seed Data Preservation
+### 10.1 Sequential Transactional Migration Runner
 
-When migrations run, the database is pre-seeded with initial records mirroring the Week 3 and Week 4 test baselines to ensure test suites and views remain completely intact:
+Migrations are managed programmatically via `backend/src/db/migrate.js`:
+* **Ledger Table**: Uses `schema_migrations (id SERIAL, version VARCHAR(255) UNIQUE, applied_at TIMESTAMPTZ)` to record each applied migration script.
+* **Deterministic Sequencing**: Reads files from `backend/src/db/migrations/` and sorts them numerically/alphabetically (`001_initial_schema.sql`, `002_jobs_and_applications.sql`).
+* **Atomic Transactions**: Each unapplied migration executes within an isolated `BEGIN ... COMMIT` block. Any error triggers a strict `ROLLBACK` and aborts server boot.
+* **Idempotency**: Running `npm run migrate` repeatedly detects previously executed scripts and safely skips them.
 
-* **Initial Users**:
-  1. `11111111-1111-4111-a111-111111111111`: Ada Lovelace (`ada.lovelace@alumni.edu`, `admin`)
-  2. `22222222-2222-4222-a222-222222222222`: Alan Turing (`alan.turing@alumni.edu`, `alumni`)
-  3. `33333333-3333-4333-a333-333333333333`: Grace Hopper (`grace.hopper@alumni.edu`, `alumni`)
-  4. `44444444-4444-4444-a444-444444444444`: Margaret Hamilton (`margaret.hamilton@alumni.edu`, `student`)
+### 10.2 Baseline Seed Data
 
-* **Initial Announcements**:
-  1. `a1111111-1111-4111-a111-111111111111`: *Annual Alumni Homecoming 2026* (`social`, `urgent`, `Alumni Relations Office`)
-  2. `b2222222-2222-4222-a222-222222222222`: *Fall Tech & Engineering Career Fair 2026* (`career`, `normal`, `Career Development Center`)
-  3. `c3333333-3333-4333-a333-333333333333`: *Distinguished Guest Speaker Series: Quantum Computing* (`academic`, `normal`, `School of Computing & Engineering`)
+Seed data is managed via `backend/src/db/seed.js` executing scripts in `backend/src/db/seeds/` using `ON CONFLICT (id) DO UPDATE` idempotency:
+* **Initial Users**: Ada Lovelace (`admin`), Alan Turing (`alumni`), Grace Hopper (`alumni`), Margaret Hamilton (`student`).
+* **Initial Bulletins**: Annual Alumni Homecoming, Fall Tech Career Fair, Quantum Computing Keynote.
 
 ---
 
 ## 11. Navigation
 
-* ⬅️ **Return to Project Documentation**: [README.md](./README.md)
+* ⬅️ **Return to Main Documentation**: [README.md](./README.md)
+* 🗄️ **Database Design Section in README**: [README.md#database-design--persistence-documentation-dddmd](./README.md#-database-design--persistence-documentation-dddmd)
 * 🏛️ **MVC Architecture & Dual Controllers**: [README.md#mvc-architecture-specification](./README.md#-mvc-architecture-specification)
 * 🧪 **Automated Test Suite**: [README.md#local-development--testing](./README.md#-local-development--testing)
 * 🐳 **Containerization Specification**: [README.md#containerization-details](./README.md#-containerization-details)
